@@ -19,6 +19,7 @@ upstream checkpoints onto it.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .drax import DraxBlock, DraxConfig
 
 
 def auto_pad(kernel_size, padding=None, dilation=1):
@@ -830,11 +831,20 @@ class Backbone9(nn.Module):
     - yolo9-m/c: Conv -> Conv -> RepNCSPELAN -> [AConv/ADown -> RepNCSPELAN] x3 -> SPPELAN
     """
 
-    def __init__(self, config="c"):
+    def __init__(self, config="c", drax_config=None):
         super().__init__()
 
         cfg = YOLO9_CONFIGS[config]
+
+        if drax_config is None:
+            drax_config = DraxConfig()
+
         self.config = config
+        self.drax_config = (
+            drax_config
+            if drax_config is not None
+            else DraxConfig()
+        )
 
         # Stem
         self.conv0 = Conv(3, cfg["conv0_out"], 3, 2)
@@ -875,6 +885,11 @@ class Backbone9(nn.Module):
         self.down2 = DownBlock(prev_ch, stage[0])
         # RepNCSPELAN: c1=down_out, c2=part, c3=part//2, c4=out
         self.elan2 = RepNCSPELAN(stage[0], stage[2], stage[2] // 2, stage[1], n)
+       
+        self.drax2 = self._make_drax(
+            "b3",
+            stage[1],
+        )
 
         # Stage 3 (B4)
         stage = cfg["stages"][1]
@@ -882,11 +897,47 @@ class Backbone9(nn.Module):
         self.down3 = DownBlock(prev_ch, stage[0])
         self.elan3 = RepNCSPELAN(stage[0], stage[2], stage[2] // 2, stage[1], n)
 
+        self.drax3 = self._make_drax(
+            "b4",
+            stage[1],
+        )
+
         # Stage 4 (B5)
         stage = cfg["stages"][2]
         prev_ch = cfg["stages"][1][1]
         self.down4 = DownBlock(prev_ch, stage[0])
         self.elan4 = RepNCSPELAN(stage[0], stage[2], stage[2] // 2, stage[1], n)
+
+        self.drax4 = self._make_drax(
+            "b5",
+            stage[1],
+        )
+
+        # Drax
+        drax_cfg = cfg.get("drax", {})
+
+        if drax_cfg.get("enabled", False):
+            self.drax4 = DraxBlock(
+                dim=stage[1],
+                use_attention=drax_cfg.get(
+                    "use_attention",
+                    True,
+                ),
+                efficient=drax_cfg.get(
+                    "efficient",
+                    True,
+                ),
+                fusion_mode=drax_cfg.get(
+                    "fusion_mode",
+                    "average",
+                ),
+                drop_path=drax_cfg.get(
+                    "drop_path",
+                    0.0,
+                ),
+            )
+        else:
+            self.drax4 = nn.Identity()
 
         # SPP
         spp_in = cfg["stages"][2][1]
@@ -903,18 +954,43 @@ class Backbone9(nn.Module):
 
         # Stage 2 - B3/P3
         x = self.down2(x)
-        p3 = self.elan2(x)
+        x = self.elan2(x)
+        p3 = self.drax2(x)
 
         # Stage 3 - B4/P4
         x = self.down3(p3)
-        p4 = self.elan3(x)
+        x = self.elan3(x)
+        p4 = self.drax3(x)
 
         # Stage 4 - B5/P5
         x = self.down4(p4)
         x = self.elan4(x)
+
+        # Optional Drax feature refinement
+        x = self.drax4(x)
+        
         p5 = self.spp(x)
 
         return p3, p4, p5
+
+    def _make_drax(
+        self,
+        stage_name: str,
+        channels: int,
+    ):
+        if not self.drax_config.enabled:
+            return nn.Identity()
+
+        if stage_name not in self.drax_config.stages:
+            return nn.Identity()
+
+        return DraxBlock(
+            dim=channels,
+            use_attention=self.drax_config.use_attention,
+            efficient=self.drax_config.efficient,
+            fusion_mode=self.drax_config.fusion_mode,
+            drop_path=self.drax_config.drop_path,
+        )
 
 
 class Neck9(nn.Module):
@@ -1011,6 +1087,7 @@ class LibreYOLO9Model(nn.Module):
         reg_max=16,
         nb_classes=80,
         img_size=640,
+        drax_config=None,
     ):
         """
         Initialize YOLOv9 model.
@@ -1035,7 +1112,17 @@ class LibreYOLO9Model(nn.Module):
 
         cfg = YOLO9_CONFIGS[config]
 
-        self.backbone = Backbone9(config)
+        self.drax_config = (
+            drax_config
+            if drax_config is not None
+            else DraxConfig()
+        )
+
+        self.backbone = Backbone9(
+            config=config, 
+            drax_config=self.drax_config
+        )
+
         self.neck = Neck9(config)
 
         # Detection head - use exact channels from config

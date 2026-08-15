@@ -171,6 +171,10 @@ class LibreYOLO9(BaseModel):
         if isinstance(model_path, str):
             self._load_weights(model_path)
 
+    @property
+    def uses_drax(self) -> bool:
+        return self.drax_config.enabled
+
     # =========================================================================
     # Model lifecycle
     # =========================================================================
@@ -180,6 +184,7 @@ class LibreYOLO9(BaseModel):
             config=self.size,
             reg_max=self.reg_max,
             nb_classes=self.nb_classes,
+            drax_config=self.drax_config,
         )
 
     def _get_available_layers(self) -> Dict[str, nn.Module]:
@@ -189,10 +194,13 @@ class LibreYOLO9(BaseModel):
             "backbone_elan1": self.model.backbone.elan1,
             "backbone_down2": self.model.backbone.down2,
             "backbone_elan2": self.model.backbone.elan2,
+            "backbone_drax2": self.model.backbone.drax2,
             "backbone_down3": self.model.backbone.down3,
             "backbone_elan3": self.model.backbone.elan3,
+            "backbone_drax3": self.model.backbone.drax3,
             "backbone_down4": self.model.backbone.down4,
             "backbone_elan4": self.model.backbone.elan4,
+            "backbone_drax4": self.model.backbone.drax4,
             "backbone_spp": self.model.backbone.spp,
             "neck_elan_up1": self.model.neck.elan_up1,
             "neck_elan_up2": self.model.neck.elan_up2,
