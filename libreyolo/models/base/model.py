@@ -584,6 +584,10 @@ class BaseModel(ABC):
     def _prepare_scratch_init(self) -> None:
         """Let wrappers reset checkpoint-derived architecture state."""
 
+    def _checkpoint_extra_metadata(self) -> Dict[str, Any]:
+        """Return optional family-specific metadata for saved checkpoints."""
+        return {}
+
     def _is_scratch_build(self) -> bool:
         """Return whether this build belongs to a scratch-training lifecycle."""
         return bool(
@@ -1775,6 +1779,8 @@ class BaseModel(ABC):
             rectangular_metadata = {"imgsz_h": imgsz_h, "imgsz_w": imgsz_w}
         else:
             checkpoint_imgsz = int(native_imgsz)
+        extra_metadata = dict(rectangular_metadata)
+        extra_metadata.update(self._checkpoint_extra_metadata())
         checkpoint = wrap_libreyolo_checkpoint(
             state_dict,
             model_family=self._get_model_name(),
@@ -1783,7 +1789,7 @@ class BaseModel(ABC):
             nc=self.nb_classes,
             names=self.names,
             imgsz=checkpoint_imgsz,
-            **rectangular_metadata,
+            **extra_metadata,
         )
         quant_manifest = getattr(self, "_quant_manifest", None)
         if quant_manifest:

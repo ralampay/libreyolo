@@ -5,14 +5,20 @@ Thin subclass of BaseTrainer with yolo9-specific transforms, scheduler,
 and loss extraction.
 """
 
+import logging
+from typing import Any, Dict, List, Type
+
 import torch
-from typing import Dict, List, Type
 
 from libreyolo.training.trainer import BaseTrainer
 from libreyolo.training.config import TrainConfig, YOLO9Config
 from libreyolo.training.freezing import FreezeGroup
+from libreyolo.utils.serialization import load_trusted_torch_file
 from ...training.scheduler import LinearLRScheduler, CosineAnnealingScheduler
+from .drax import DraxConfig, _drax_config_from_checkpoint
 from .transforms import YOLO9TrainTransform, YOLO9MosaicMixupDataset
+
+logger = logging.getLogger(__name__)
 
 
 class YOLO9Trainer(BaseTrainer):
@@ -28,10 +34,13 @@ class YOLO9Trainer(BaseTrainer):
         "elan1",
         "down2",
         "elan2",
+        "drax2",
         "down3",
         "elan3",
+        "drax3",
         "down4",
         "elan4",
+        "drax4",
         "spp",
     )
     _NECK_FREEZE_MODULES = (
@@ -52,6 +61,38 @@ class YOLO9Trainer(BaseTrainer):
 
     def get_model_tag(self) -> str:
         return f"YOLOv9-{self.config.size}"
+
+    def _checkpoint_extra_metadata(self) -> Dict[str, Any]:
+        if self.get_model_family() != "yolo9":
+            return {}
+        config = getattr(self.wrapper_model, "drax_config", None)
+        if config is None:
+            config = getattr(self.model, "drax_config", DraxConfig())
+        return {"drax": config.to_dict()}
+
+    def resume(self, checkpoint_path: str):
+        checkpoint = load_trusted_torch_file(
+            checkpoint_path,
+            map_location="cpu",
+            context="YOLOv9 resume architecture check",
+        )
+        checkpoint_config, inferred = _drax_config_from_checkpoint(checkpoint)
+        current_config = getattr(self.wrapper_model, "drax_config", None)
+        if current_config is None:
+            current_config = getattr(self.model, "drax_config", DraxConfig())
+        if inferred:
+            logger.warning(
+                "Resume checkpoint has no Drax metadata; inferred stages %s "
+                "from state-dict keys using the default Drax options.",
+                ", ".join(stage.upper() for stage in checkpoint_config.stages),
+            )
+        if checkpoint_config != current_config:
+            raise RuntimeError(
+                "Cannot resume training because the Drax architecture differs.\n\n"
+                f"Checkpoint:\n{checkpoint_config.to_dict()}\n\n"
+                f"Current model:\n{current_config.to_dict()}"
+            )
+        return super().resume(checkpoint_path)
 
     def validate_validation_loss_config(self) -> None:
         if not getattr(self.config, "val_loss", False):

@@ -133,6 +133,31 @@ already use top-level keys such as `model_family`, `size`, `nc`, `names`, and
 The top-level `model` value is deliberately a `state_dict`, matching existing
 LibreYOLO behavior. Other checkpoint formats may differ.
 
+### YOLOv9 Drax architecture metadata
+
+YOLOv9 checkpoints may include an optional top-level `drax` dictionary. It is
+the architecture source of truth for Drax-enabled checkpoints and is consumed
+before their state dictionary is applied:
+
+```python
+{
+    "version": 1,
+    "enabled": True,
+    "stages": ["b5"],
+    "use_attention": True,
+    "efficient": True,
+    "fusion_mode": "average",
+    "drop_path": 0.0,
+}
+```
+
+The dictionary contains primitive Python values only. Supported stages are
+`b3`, `b4`, and `b5`; supported fusion modes are `average` and `sknet`.
+Vanilla and older YOLOv9 checkpoints may omit `drax`, in which case Drax is
+disabled. Early development checkpoints with `backbone.drax*` tensors but no
+metadata use a warning-backed best-effort stage inference; other Drax options
+cannot be recovered reliably and use the first supported experiment defaults.
+
 ## Export Runtime Metadata
 
 Checkpoint and export runtime metadata use the same rectangular dual-write

@@ -197,6 +197,9 @@ def build_model_info(model: Any, *, detailed: bool = False) -> Dict[str, Any]:
         "device": str(getattr(model, "device", "")) or None,
         "model_path": str(getattr(model, "model_path", "")) or None,
     }
+    extra_info = getattr(model, "_model_info_extra", None)
+    if callable(extra_info):
+        data.update(extra_info())
     if detailed:
         data["details"] = _parameter_details(core)
     return data
@@ -246,6 +249,21 @@ def format_model_info(info: Dict[str, Any]) -> str:
     device = info.get("device")
     if device:
         lines.append(f"Device:     {device}")
+
+    drax = info.get("drax")
+    if isinstance(drax, dict):
+        enabled = bool(drax.get("enabled", False))
+        stages = drax.get("stages", []) if enabled else []
+        lines.extend(
+            [
+                f"Drax:       {'enabled' if enabled else 'disabled'}",
+                f"Drax stages: {', '.join(str(s).upper() for s in stages) or 'none'}",
+                f"Drax attention: {'enabled' if drax.get('use_attention') else 'disabled'}",
+                f"Drax efficient attention: {'enabled' if drax.get('efficient') else 'disabled'}",
+                f"Drax fusion: {drax.get('fusion_mode', 'unavailable')}",
+                f"Drax parameters: {_format_count(info.get('drax_parameters'))}",
+            ]
+        )
 
     details = info.get("details")
     if details:

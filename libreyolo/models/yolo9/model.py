@@ -20,6 +20,7 @@ from ...utils.serialization import (
     load_untrusted_torch_file,
     validate_checkpoint_metadata,
 )
+from .drax import DraxConfig, _drax_config_from_checkpoint
 from .nn import LibreYOLO9Model
 from ...postprocess.yolo9 import postprocess
 from .utils import preprocess_image
@@ -39,6 +40,8 @@ class LibreYOLO9(BaseModel):
         reg_max: Regression max value for DFL (default: 16).
         nb_classes: Number of classes (default: 80 for COCO).
         device: Device for inference.
+        drax_config: Optional Drax architecture. Explicit values take precedence
+            over checkpoint metadata.
 
     Example::
 
@@ -157,9 +160,18 @@ class LibreYOLO9(BaseModel):
         nb_classes: int = 80,
         device: str = "auto",
         task: str | None = None,
+        drax_config: DraxConfig | None = None,
         **kwargs,
     ):
         self.reg_max = reg_max
+        if drax_config is not None and not isinstance(drax_config, DraxConfig):
+            raise TypeError("drax_config must be a DraxConfig or None")
+        self._drax_config_explicit = drax_config is not None
+        self.drax_config = drax_config if drax_config is not None else DraxConfig()
+        if self.FAMILY != "yolo9" and self.drax_config.enabled:
+            raise NotImplementedError(
+                "Drax is currently supported by the standard YOLOv9 family only."
+            )
         super().__init__(
             model_path=model_path,
             size=size,
@@ -174,6 +186,10 @@ class LibreYOLO9(BaseModel):
     @property
     def uses_drax(self) -> bool:
         return self.drax_config.enabled
+
+    @property
+    def drax_stages(self) -> tuple[str, ...]:
+        return self.drax_config.stages if self.uses_drax else ()
 
     # =========================================================================
     # Model lifecycle
@@ -211,12 +227,104 @@ class LibreYOLO9(BaseModel):
     def _strict_loading(self) -> bool:
         return False
 
+    @staticmethod
+    def _drax_state_keys(state_dict: dict) -> set[str]:
+        prefixes = (
+            "backbone.drax2.",
+            "backbone.drax3.",
+            "backbone.drax4.",
+        )
+        return {key for key in state_dict if key.startswith(prefixes)}
+
+    def _filter_incoming_state_dict(
+        self,
+        state_dict: dict,
+        *,
+        loaded: dict | None = None,
+        checkpoint_task: str | None = None,
+    ) -> dict:
+        state_dict = super()._filter_incoming_state_dict(
+            state_dict,
+            loaded=loaded,
+            checkpoint_task=checkpoint_task,
+        )
+        if self.FAMILY != "yolo9" or not isinstance(loaded, dict):
+            return state_dict
+
+        checkpoint_config, inferred = _drax_config_from_checkpoint(loaded)
+        self._incoming_drax_config = checkpoint_config
+        self._incoming_drax_inferred = inferred
+        if inferred:
+            logger.warning(
+                "Drax checkpoint metadata is missing; inferred stages %s from "
+                "state-dict keys and assumed attention=True, efficient=True, "
+                "fusion_mode='average', drop_path=0.0.",
+                ", ".join(stage.upper() for stage in checkpoint_config.stages),
+            )
+
+        if not self._drax_config_explicit and checkpoint_config != self.drax_config:
+            self.drax_config = checkpoint_config
+            self.model = self._init_model().to(self.device)
+        return state_dict
+
     def _validate_loaded_state_dict_for_task(
         self,
         state_dict: dict,
         checkpoint: dict | None = None,
     ) -> None:
-        return
+        if self.FAMILY != "yolo9" or not isinstance(checkpoint, dict):
+            return
+
+        checkpoint_config = getattr(self, "_incoming_drax_config", DraxConfig())
+        inferred = bool(getattr(self, "_incoming_drax_inferred", False))
+        actual = self._drax_state_keys(state_dict)
+
+        if "drax" in checkpoint and not checkpoint_config.enabled and actual:
+            raise RuntimeError(
+                "Checkpoint Drax metadata says Drax is disabled, but Drax tensors "
+                "are present in the state dict."
+            )
+
+        if not checkpoint_config.enabled and not inferred:
+            return
+
+        current = self.model.state_dict()
+        expected = self._drax_state_keys(current)
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+        mismatched = sorted(
+            key
+            for key in expected & actual
+            if current[key].shape != state_dict[key].shape
+        )
+        if missing or unexpected or mismatched:
+            raise RuntimeError(
+                "Drax checkpoint tensors do not match the requested architecture: "
+                f"missing={missing[:5]}, unexpected={unexpected[:5]}, "
+                f"shape_mismatch={mismatched[:5]}."
+            )
+
+    def _prepare_scratch_init(self) -> None:
+        if not self._drax_config_explicit:
+            self.drax_config = DraxConfig()
+
+    def _checkpoint_extra_metadata(self) -> Dict[str, Any]:
+        if self.FAMILY != "yolo9":
+            return {}
+        return {"drax": self.drax_config.to_dict()}
+
+    def _model_info_extra(self) -> Dict[str, Any]:
+        if self.FAMILY != "yolo9":
+            return {}
+        drax_parameters = sum(
+            parameter.numel()
+            for name, parameter in self.model.named_parameters()
+            if name.startswith("backbone.drax")
+        )
+        return {
+            "drax": self.drax_config.to_dict(),
+            "drax_parameters": drax_parameters,
+        }
 
     def _prepare_state_dict(
         self,
@@ -372,22 +480,64 @@ class LibreYOLO9(BaseModel):
             state_dict = loaded
 
         state_dict = self._prepare_state_dict(self._strip_ddp_prefix(state_dict))
-        total_tensors = len(state_dict)
         self._align_class_towers_for_transfer(state_dict)
 
         current = self.model.state_dict()
+        missing_key = sorted(key for key in state_dict if key not in current)
+        shape_mismatch = sorted(
+            key
+            for key, value in state_dict.items()
+            if key in current and current[key].shape != value.shape
+        )
         matched = {
             key: value
             for key, value in state_dict.items()
             if key in current and current[key].shape == value.shape
         }
+        newly_initialized = sorted(set(current) - set(matched))
         current.update(matched)
         self.model.load_state_dict(current, strict=True)
         self.model.to(self.device)
-        return {
+        drax_new_tensors = [
+            key for key in newly_initialized if key.startswith("backbone.drax")
+        ]
+        matched_names = set(matched)
+        drax_new_parameters = sum(
+            parameter.numel()
+            for name, parameter in self.model.named_parameters()
+            if name.startswith("backbone.drax") and name not in matched_names
+        )
+        stats = {
             "loaded": len(matched),
-            "skipped": max(total_tensors - len(matched), 0),
+            "skipped": len(missing_key) + len(shape_mismatch),
+            "skipped_missing_key": len(missing_key),
+            "skipped_shape_mismatch": len(shape_mismatch),
+            "newly_initialized": len(newly_initialized),
+            "drax_new_tensors": len(drax_new_tensors),
+            "drax_new_parameters": drax_new_parameters,
         }
+        logger.info(
+            "Transfer load from %s: loaded=%d, missing-key=%d, "
+            "shape-mismatch=%d, newly-initialized=%d.",
+            path,
+            stats["loaded"],
+            stats["skipped_missing_key"],
+            stats["skipped_shape_mismatch"],
+            stats["newly_initialized"],
+        )
+        logger.info(
+            "Drax architecture: enabled=%s, stages=%s, fusion=%s. "
+            "Initialized from scratch: %d tensors / %d parameters.",
+            "yes" if self.uses_drax else "no",
+            ",".join(stage.upper() for stage in self.drax_stages) or "none",
+            self.drax_config.fusion_mode,
+            stats["drax_new_tensors"],
+            stats["drax_new_parameters"],
+        )
+        logger.debug("Transfer keys missing from target: %s", missing_key)
+        logger.debug("Transfer keys with shape mismatch: %s", shape_mismatch)
+        logger.debug("Newly initialized target keys: %s", newly_initialized)
+        return stats
 
     def _default_transfer_weights_name(self) -> str:
         """Return the matching detect checkpoint filename for transfer learning."""

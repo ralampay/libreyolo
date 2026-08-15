@@ -320,6 +320,54 @@ def validate_checkpoint_metadata(
         if not isinstance(imgsz, int) or isinstance(imgsz, bool) or imgsz <= 0:
             errors.append("imgsz must be a positive int.")
 
+        if "drax" in checkpoint:
+            drax = checkpoint["drax"]
+            required_drax_keys = {
+                "version",
+                "enabled",
+                "stages",
+                "use_attention",
+                "efficient",
+                "fusion_mode",
+                "drop_path",
+            }
+            if not isinstance(drax, dict):
+                errors.append("drax must be a dictionary.")
+            else:
+                missing = sorted(required_drax_keys - set(drax))
+                unexpected = sorted(set(drax) - required_drax_keys)
+                if missing or unexpected:
+                    errors.append(
+                        "drax fields are invalid: "
+                        f"missing={missing}, unexpected={unexpected}."
+                    )
+                version = drax.get("version")
+                if (
+                    not isinstance(version, int)
+                    or isinstance(version, bool)
+                    or version != 1
+                ):
+                    errors.append("drax.version must be the integer 1.")
+                for key in ("enabled", "use_attention", "efficient"):
+                    if not isinstance(drax.get(key), bool):
+                        errors.append(f"drax.{key} must be a bool.")
+                stages = drax.get("stages")
+                if not isinstance(stages, list) or not all(
+                    isinstance(stage, str) for stage in stages
+                ):
+                    errors.append("drax.stages must be a list of strings.")
+                elif any(stage not in {"b3", "b4", "b5"} for stage in stages):
+                    errors.append("drax.stages may only contain b3, b4, and b5.")
+                if drax.get("fusion_mode") not in {"average", "sknet"}:
+                    errors.append("drax.fusion_mode must be 'average' or 'sknet'.")
+                drop_path = drax.get("drop_path")
+                if (
+                    isinstance(drop_path, bool)
+                    or not isinstance(drop_path, (int, float))
+                    or not 0.0 <= float(drop_path) < 1.0
+                ):
+                    errors.append("drax.drop_path must satisfy 0 <= value < 1.")
+
     if strict and errors:
         raise CheckpointMetadataError("; ".join(errors))
     return errors

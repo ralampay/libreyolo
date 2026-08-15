@@ -831,20 +831,17 @@ class Backbone9(nn.Module):
     - yolo9-m/c: Conv -> Conv -> RepNCSPELAN -> [AConv/ADown -> RepNCSPELAN] x3 -> SPPELAN
     """
 
-    def __init__(self, config="c", drax_config=None):
+    def __init__(
+        self,
+        config="c",
+        drax_config: DraxConfig | None = None,
+    ):
         super().__init__()
 
         cfg = YOLO9_CONFIGS[config]
 
-        if drax_config is None:
-            drax_config = DraxConfig()
-
         self.config = config
-        self.drax_config = (
-            drax_config
-            if drax_config is not None
-            else DraxConfig()
-        )
+        self.drax_config = drax_config if drax_config is not None else DraxConfig()
 
         # Stem
         self.conv0 = Conv(3, cfg["conv0_out"], 3, 2)
@@ -913,32 +910,6 @@ class Backbone9(nn.Module):
             stage[1],
         )
 
-        # Drax
-        drax_cfg = cfg.get("drax", {})
-
-        if drax_cfg.get("enabled", False):
-            self.drax4 = DraxBlock(
-                dim=stage[1],
-                use_attention=drax_cfg.get(
-                    "use_attention",
-                    True,
-                ),
-                efficient=drax_cfg.get(
-                    "efficient",
-                    True,
-                ),
-                fusion_mode=drax_cfg.get(
-                    "fusion_mode",
-                    "average",
-                ),
-                drop_path=drax_cfg.get(
-                    "drop_path",
-                    0.0,
-                ),
-            )
-        else:
-            self.drax4 = nn.Identity()
-
         # SPP
         spp_in = cfg["stages"][2][1]
         spp_out = cfg["spp_out"]
@@ -966,9 +937,8 @@ class Backbone9(nn.Module):
         x = self.down4(p4)
         x = self.elan4(x)
 
-        # Optional Drax feature refinement
         x = self.drax4(x)
-        
+
         p5 = self.spp(x)
 
         return p3, p4, p5
@@ -977,7 +947,7 @@ class Backbone9(nn.Module):
         self,
         stage_name: str,
         channels: int,
-    ):
+    ) -> nn.Module:
         if not self.drax_config.enabled:
             return nn.Identity()
 
@@ -1087,7 +1057,7 @@ class LibreYOLO9Model(nn.Module):
         reg_max=16,
         nb_classes=80,
         img_size=640,
-        drax_config=None,
+        drax_config: DraxConfig | None = None,
     ):
         """
         Initialize YOLOv9 model.
@@ -1097,6 +1067,7 @@ class LibreYOLO9Model(nn.Module):
             reg_max: Regression max value for DFL
             nb_classes: Number of classes
             img_size: Input image size
+            drax_config: Optional Drax refinement architecture.
         """
         super().__init__()
 
@@ -1112,15 +1083,11 @@ class LibreYOLO9Model(nn.Module):
 
         cfg = YOLO9_CONFIGS[config]
 
-        self.drax_config = (
-            drax_config
-            if drax_config is not None
-            else DraxConfig()
-        )
+        self.drax_config = drax_config if drax_config is not None else DraxConfig()
 
         self.backbone = Backbone9(
-            config=config, 
-            drax_config=self.drax_config
+            config=config,
+            drax_config=self.drax_config,
         )
 
         self.neck = Neck9(config)
