@@ -947,6 +947,8 @@ _VAL_LOSS_FAMILIES = {
     "libreyolo.models.yolo9.trainer": "YOLO9Trainer",
     "libreyolo.models.yolo9_e2e.trainer": "YOLO9E2ETrainer",
     "libreyolo.models.yolo9_p2.trainer": "YOLO9P2Trainer",
+    "libreyolo.models.yolo9-drax-mobilenet-v3.trainer": "YOLO9DraxMobileNetV3LargeTrainer",
+    "libreyolo.models.yolox-drax-mobilenet-v3.trainer": "YOLOXDraxMobileNetV3LargeTrainer",
     "libreyolo.models.yolonas.trainer": "YOLONASTrainer",
     "libreyolo.models.rtdetr.trainer": "RTDETRTrainer",
     "libreyolo.models.rtdetrv2.trainer": "RTDETRv2Trainer",

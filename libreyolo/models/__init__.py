@@ -10,6 +10,7 @@ All model families register here via ``__init_subclass__``. Adding a new model m
 from __future__ import annotations
 
 import logging
+from importlib import import_module
 from pathlib import Path
 
 from .base import BaseModel
@@ -47,6 +48,13 @@ _METADATA_CONVERSION_HELP = (
 from .ec.model import LibreEC  # noqa: E402
 from .yolox.model import LibreYOLOX  # noqa: E402
 from .yolo9_e2e.model import LibreYOLO9E2E  # noqa: E402
+# These package directories use the public model spelling, which requires dynamic imports.
+LibreYOLO9DraxMobileNetV3Large = import_module(
+    ".yolo9-drax-mobilenet-v3.model", __name__
+).LibreYOLO9DraxMobileNetV3Large
+LibreYOLOXDraxMobileNetV3Large = import_module(
+    ".yolox-drax-mobilenet-v3.model", __name__
+).LibreYOLOXDraxMobileNetV3Large
 from .yolo9_p2.model import LibreYOLO9P2  # noqa: E402  (must precede LibreYOLO9: P2 checkpoints also match the base backbone/neck patterns)
 from .yolo9.model import LibreYOLO9  # noqa: E402
 from .yolonas.model import LibreYOLONAS  # noqa: E402
@@ -740,7 +748,7 @@ def LibreYOLO(
     )
     family_kwargs = (
         {"reg_max": reg_max}
-        if matched_cls.FAMILY in ("yolo9", "yolo9_e2e", "yolo9_p2")
+        if matched_cls.FAMILY in ("yolo9", "yolo9_e2e", "yolo9_p2", "yolo9_drax_mobilenet_v3_large")
         else {}
     )
     if matched_cls.FAMILY in ("rfdetr", "dinov2"):
@@ -783,6 +791,8 @@ __all__ = [
     "LibreYOLO9",
     "LibreYOLO9E2E",
     "LibreYOLO9P2",
+    "LibreYOLO9DraxMobileNetV3Large",
+    "LibreYOLOXDraxMobileNetV3Large",
     "LibreYOLONAS",
     "LibreDFINE",
     "LibreDEIM",

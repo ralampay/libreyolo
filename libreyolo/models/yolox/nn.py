@@ -323,9 +323,13 @@ class YOLOPAFPN(nn.Module):
         in_channels=[256, 512, 1024],
         depthwise=False,
         act="silu",
+        backbone=None,
     ):
         super().__init__()
-        self.backbone = CSPDarknet(depth, width, depthwise=depthwise, act=act)
+        self.backbone = (
+            backbone if backbone is not None
+            else CSPDarknet(depth, width, depthwise=depthwise, act=act)
+        )
         self.in_features = in_features
         self.in_channels = in_channels
         Conv = DWConv if depthwise else BaseConv
@@ -1087,7 +1091,9 @@ class LibreYOLOXModel(nn.Module):
         "x": {"depth": 1.33, "width": 1.25, "depthwise": False},
     }
 
-    def __init__(self, config: str = "s", nb_classes: int = 80, act: str = "silu"):
+    def __init__(
+        self, config: str = "s", nb_classes: int = 80, act: str = "silu", backbone=None
+    ):
         """
         Initialize YOLOX model.
 
@@ -1115,6 +1121,7 @@ class LibreYOLOXModel(nn.Module):
         self.backbone = YOLOPAFPN(
             depth=depth,
             width=width,
+            backbone=backbone,
             in_channels=in_channels,
             depthwise=depthwise,
             act=act,

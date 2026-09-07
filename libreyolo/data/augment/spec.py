@@ -77,6 +77,8 @@ FAMILY_DISPLAY_NAMES: Dict[str, str] = {
     "yolo9": "YOLOv9",
     "yolo9_e2e": "YOLOv9-E2E",
     "yolo9_p2": "YOLOv9-P2",
+    "yolo9_drax_mobilenet_v3_large": "YOLO9 Drax MobileNetV3 Large",
+    "yolox_drax_mobilenet_v3_large": "YOLOX Drax MobileNetV3 Large",
     "yolonas": "YOLO-NAS",
     "rtdetr": "RT-DETR",
     "rtdetrv2": "RT-DETRv2",
@@ -185,6 +187,8 @@ FAMILY_AUG_SUPPORT: Dict[str, Dict[str, Support]] = {
     "yolo9": dict(_YOLOX_STYLE),
     "yolo9_e2e": dict(_YOLOX_STYLE),
     "yolo9_p2": dict(_YOLOX_STYLE),
+    "yolo9_drax_mobilenet_v3_large": dict(_YOLOX_STYLE),
+    "yolox_drax_mobilenet_v3_large": dict(_YOLOX_STYLE),
     "rtmdet": {
         **_YOLOX_STYLE,
         "flipud": _i("RTMDet's transform has no vertical flip."),

@@ -65,6 +65,20 @@ def _create_explicit_task_train_model(
     """
     from libreyolo.tasks import normalize_task
 
+    model_cls = get_model_class(family)
+    if (
+        model_cls is not None
+        and getattr(model_cls, "PRETRAINED_BACKBONE_ONLY", False)
+        and pretrained is not False
+        and not resume
+        and not _model_ref_exists(model_path)
+        and Path(model_path).parent == Path(".")
+        and not model_path.startswith(("./", "../"))
+    ):
+        size = model_cls.detect_size_from_filename(Path(model_path).name)
+        if size is not None:
+            return model_cls._from_scratch(size=size, task=task, device=device, seed=seed)
+
     if pretrained is False and not resume:
         from libreyolo.models.registry import group_of
 

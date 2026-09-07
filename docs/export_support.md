@@ -104,11 +104,13 @@ in preflight.
 | yolo4 | detect | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |  | ✓ |  |  | ✓ |
 | yolo7 | detect | ✓ | ✓ | ✓ | available | ✓ |  |  |  | ✓ |  |  | ✓ |
 | yolo9 | detect | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | available | ✓ | ✓ | available | ✓ |
+| yolo9_drax_mobilenet_v3_large | detect | ✓ | available | available | available | available |  |  |  | available |  |  |  |
 | yolo9_e2e | detect | ✓ | ✓ | ✓ | available | ✓ | ✓ | ✓ | available | ✓ |  |  | ✓ |
 | yolo9_p2 | detect | ✓ | ✓ | ✓ | available | ✓ | ✓ | ✓ |  | available |  |  | ✓ |
 | yolonas | detect | ✓ | ✓ | ✓ | available | ✓ | ✓ | ✓ | available | ✓ | ✓ |  | ✓ |
 | yolonas | pose | ✓ | ✓ | ✓ | available | ✓ | ✓ |  |  | ✓ |  |  |  |
 | yolox | detect | ✓ | ✓ | ✓ | available | ✓ |  |  |  | ✓ | ✓ | available | ✓ |
+| yolox_drax_mobilenet_v3_large | detect | ✓ | available | available | available | available |  |  |  | available |  |  |  |
 | zipdepth | depth | ✓ | ✓ | ✓ | available | ✓ |  |  |  | ✓ |  |  | ✓ |
 
 ## Parity thresholds
@@ -397,6 +399,7 @@ A check mark applies only under any constraint listed here.
 - `yolo9` / `detect` / `mnn`: MNN 3.6.1, CPU, FP32, batch 1, fixed NCHW input shape
 - `yolo9` / `detect` / `ncnn`: PNNX/NCNN 20260526 CPU FP32 with a fixed export canvas; trained MIT checkpoint covered by two-input raw parity, factory reload, metadata, and non-square public predict parity
 - `yolo9` / `detect` / `coreai`: fixed export canvas; trained LibreYOLO9t weights are covered on macOS 27 by direct named-output parity with a 3e-04 tolerance and a 100x input-sensitivity margin
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `onnx`: CPU FP32 tensor and preprocessing parity at size s, 64x64, static and dynamic batch; tests/unit/test_drax_mobilenet_v3_export.py
 - `yolo9_e2e` / `detect` / `executorch`: ExecuTorch 1.2, XNNPACK, CPU, FP32, batch 1, fixed input shape
 - `yolo9_e2e` / `detect` / `openvino`: fixed export canvas; YOLO1 requires 448x448
 - `yolo9_e2e` / `detect` / `paddle`: X2Paddle 1.6.0, PaddlePaddle 2.6.2 CPU, ONNX 1.17/opset 15, FP32, batch 1, fixed square input; WSL2 Ubuntu 22.04
@@ -423,6 +426,7 @@ A check mark applies only under any constraint listed here.
 - `yolox` / `detect` / `openvino`: fixed export canvas; YOLO1 requires 448x448
 - `yolox` / `detect` / `ncnn`: PNNX/NCNN 20260526 CPU FP32 with permissively licensed trained checkpoints; two-input raw parity, factory reload, metadata, and public predict parity
 - `yolox` / `detect` / `coreai`: fixed export canvas; a representative published trained checkpoint for each family is covered on Apple hardware by direct named-output parity with a 3e-04 tolerance and a 100x input-sensitivity margin; RT-DETRv2 permits one shared whole-query permutation across its box and logit outputs because DETR query rows are an unordered set
+- `yolox_drax_mobilenet_v3_large` / `detect` / `onnx`: CPU FP32 tensor and preprocessing parity at size s, 64x64, static and dynamic batch; tests/unit/test_drax_mobilenet_v3_export.py
 - `zipdepth` / `depth` / `onnx`: fixed-resolution export canvas
 - `zipdepth` / `depth` / `torchscript`: fixed-resolution export canvas
 - `zipdepth` / `depth` / `executorch`: ExecuTorch 1.2, XNNPACK, CPU, FP32, batch 1, fixed input shape; Depth Anything uses the Apache-2.0 Small checkpoint
@@ -511,6 +515,11 @@ These converter paths are callable with the recorded validation context.
 - `yolo7` / `detect` / `tensorrt`: TensorRT 10.16 FP32 exports and reloads, but the permissively licensed trained checkpoint changes the public top-k class membership.
 - `yolo9` / `detect` / `rknn`: Exact small variants passed RKNN Toolkit2 2.3.2 compilation, RK3588 PC-simulator raw-output gates, and matched post-NMS detections on a real image. Support is limited to YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s; on-device latency and parity have not been measured. Constraint: RKNN Toolkit2 2.3.2, RK3588 PC simulator, vendor floating build, batch 1, fixed square input
 - `yolo9` / `detect` / `coreml`: Conversion is available, but runtime parity requires a macOS runner.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `torchscript`: Conversion is implemented; numeric runtime parity has not been recorded for this combination.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `executorch`: Conversion is implemented; numeric runtime parity has not been recorded for this combination.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `tensorrt`: The converter path is available, but the project has not yet recorded TensorRT runtime parity for this family and task.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `openvino`: The converter path is available, but the project has not yet recorded OpenVINO runtime parity for this family and task.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `ncnn`: Conversion is implemented; numeric runtime parity has not been recorded for this combination.
 - `yolo9_e2e` / `detect` / `tensorrt`: Repeated TensorRT 10.16 FP32 engine builds with the permissively licensed trained checkpoint alternate between public top-k class drift and parity.
 - `yolo9_e2e` / `detect` / `rknn`: Exact small variants passed RKNN Toolkit2 2.3.2 compilation, RK3588 PC-simulator raw-output gates, and matched post-NMS detections on a real image. Support is limited to YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s; on-device latency and parity have not been measured. Constraint: RKNN Toolkit2 2.3.2, RK3588 PC simulator, vendor floating build, batch 1, fixed square input
 - `yolo9_p2` / `detect` / `tensorrt`: TensorRT 10.16 FP32 exports and reloads, but the pinned permissive YOLO9 transfer fixture changes the public top-k class membership.
@@ -520,6 +529,11 @@ These converter paths are callable with the recorded validation context.
 - `yolonas` / `pose` / `tensorrt`: A deterministic synthetic trained fixture exports, reloads, and passes public predict parity, but image signal is only 2 to 6 times the TensorRT conversion error.
 - `yolox` / `detect` / `tensorrt`: The permissively licensed trained checkpoint exports, reloads, and passes public predict parity, but normalized raw error is 1.6% and image signal is only 2.1 times the conversion error.
 - `yolox` / `detect` / `coreml`: Conversion is available, but runtime parity requires a macOS runner.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `torchscript`: Conversion is implemented; numeric runtime parity has not been recorded for this combination.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `executorch`: Conversion is implemented; numeric runtime parity has not been recorded for this combination.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `tensorrt`: The converter path is available, but the project has not yet recorded TensorRT runtime parity for this family and task.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `openvino`: The converter path is available, but the project has not yet recorded OpenVINO runtime parity for this family and task.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `ncnn`: Conversion is implemented; numeric runtime parity has not been recorded for this combination.
 - `zipdepth` / `depth` / `tensorrt`: TensorRT 10.16 FP32 exports, reloads, and predicts, but repeated builds produced raw depth PSNR as low as 30.27 dB, below the 40 dB promotion gate.
 
 ## Blocked combinations
@@ -1259,6 +1273,12 @@ These converter paths are callable with the recorded validation context.
 - `yolo7` / `detect` / `rknn`: RKNN v1 is limited to the exact simulator-tested detection variants: YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s on RK3588.
 - `yolo7` / `detect` / `tflite`: The converted LiteRT graph changes decoded box coordinates beyond the detector parity tolerance.
 - `yolo7` / `detect` / `coreml`: This family and task are not covered by the family-aware CoreML wrapper.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `paddle`: This family and task have not been validated through the ONNX-to-Paddle conversion path.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `mnn`: MNN v1 has no implemented runtime contract for this family and task.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `rknn`: RKNN v1 is limited to the exact simulator-tested detection variants: YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s on RK3588.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `tflite`: This family and task have not been validated through the ONNX-to-TFLite path.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `coreml`: This family and task are not covered by the family-aware CoreML wrapper.
+- `yolo9_drax_mobilenet_v3_large` / `detect` / `coreai`: This family and task have not been validated for Core AI export.
 - `yolo9_e2e` / `detect` / `tflite`: onnx2tf 2.6.7 exports a runnable artifact, but public top-k class membership changes after LiteRT 2.1.2 conversion.
 - `yolo9_e2e` / `detect` / `coreml`: This family and task are not covered by the family-aware CoreML wrapper.
 - `yolo9_p2` / `detect` / `rknn`: RKNN v1 is limited to the exact simulator-tested detection variants: YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s on RK3588.
@@ -1273,6 +1293,12 @@ These converter paths are callable with the recorded validation context.
 - `yolox` / `detect` / `paddle`: This family and task have not been validated through the ONNX-to-Paddle conversion path.
 - `yolox` / `detect` / `mnn`: MNN v1 has no implemented runtime contract for this family and task.
 - `yolox` / `detect` / `rknn`: RKNN v1 is limited to the exact simulator-tested detection variants: YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s on RK3588.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `paddle`: This family and task have not been validated through the ONNX-to-Paddle conversion path.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `mnn`: MNN v1 has no implemented runtime contract for this family and task.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `rknn`: RKNN v1 is limited to the exact simulator-tested detection variants: YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s on RK3588.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `tflite`: This family and task have not been validated through the ONNX-to-TFLite path.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `coreml`: This family and task are not covered by the family-aware CoreML wrapper.
+- `yolox_drax_mobilenet_v3_large` / `detect` / `coreai`: This family and task have not been validated for Core AI export.
 - `zipdepth` / `depth` / `paddle`: This family and task have not been validated through the ONNX-to-Paddle conversion path.
 - `zipdepth` / `depth` / `mnn`: MNN v1 has no implemented runtime contract for this family and task.
 - `zipdepth` / `depth` / `rknn`: RKNN v1 is limited to the exact simulator-tested detection variants: YOLO9-t, YOLO9-E2E-t, YOLO-NAS-s, and PicoDet-s on RK3588.

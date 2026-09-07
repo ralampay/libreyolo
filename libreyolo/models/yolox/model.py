@@ -55,6 +55,8 @@ class LibreYOLOX(BaseModel):
 
     @classmethod
     def can_load(cls, weights_dict: dict) -> bool:
+        if "backbone.backbone.adapter_down.weight" in weights_dict:
+            return False
         return any("backbone.backbone" in k or "head.stems" in k for k in weights_dict)
 
     @classmethod
@@ -186,6 +188,14 @@ class LibreYOLOX(BaseModel):
             "strides": [8, 16, 32],
         }
 
+    def _trainer_class(self):
+        from .trainer import YOLOXTrainer
+
+        return YOLOXTrainer
+
+    def _initialize_training_weights(self, pretrained, resume):
+        """Family hook; standard YOLOX uses weights loaded at construction."""
+
     @ddp_aware()
     def train(
         self,
@@ -237,7 +247,6 @@ class LibreYOLOX(BaseModel):
         Returns:
             Training results dict with final_loss, best_mAP50, best_mAP50_95, etc.
         """
-        from .trainer import YOLOXTrainer
         from libreyolo.data import load_data_config
 
         try:
@@ -274,7 +283,9 @@ class LibreYOLOX(BaseModel):
             if str(device).lower() not in ("cpu", "mps") and torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
 
-        trainer = YOLOXTrainer(
+        self._initialize_training_weights(pretrained, resume)
+
+        trainer = self._trainer_class()(
             model=self.model,
             wrapper_model=self,
             size=self.size,

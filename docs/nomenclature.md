@@ -868,3 +868,17 @@ Example: `yolo9_p2` declares `("visdrone",)`, so `LibreYOLO9P2s-visdrone.pt`
 resolves the Hugging Face repo `LibreYOLO/LibreYOLO9P2s-visdrone` (a research
 preview under VisDrone's CC BY-NC-SA license, announced by a download notice).
 Plain COCO-default weights never carry a variant suffix.
+
+## Drax MobileNetV3 Large detector variants
+
+| Family identifier | Python class | CLI alias | Sizes |
+| --- | --- | --- | --- |
+| `yolo9_drax_mobilenet_v3_large` | `LibreYOLO9DraxMobileNetV3Large` | `yolo9-drax-mobilenet-v3-large` | `t`, `s`, `m`, `c` |
+| `yolox_drax_mobilenet_v3_large` | `LibreYOLOXDraxMobileNetV3Large` | `yolox-drax-mobilenet-v3-large` | `n`, `t`, `s`, `m`, `l`, `x` |
+
+Both are detect-only. The unsuffixed CLI aliases select size `s`; append
+`-t`, `-s`, etc. to select a detector size. MobileNetV3 remains Large at every
+size; the size controls the neck and head. Checkpoint prefixes match the
+Python classes, for example `LibreYOLO9DraxMobileNetV3Larges.pt`.
+These names identify architectures; no pretrained detector downloads are
+published. See [the backbone guide](drax_mobilenet_v3.md).

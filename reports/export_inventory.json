@@ -1895,6 +1895,37 @@
     "available": true,
     "group": "g0"
   },
+  "yolo9_drax_mobilenet_v3_large": {
+    "class": "libreyolo.models.yolo9-drax-mobilenet-v3.model.LibreYOLO9DraxMobileNetV3Large",
+    "tasks": [
+      "detect"
+    ],
+    "default_task": "detect",
+    "sizes": {
+      "t": 640,
+      "s": 640,
+      "m": 640,
+      "c": 640
+    },
+    "default_imgsz": {
+      "t": 640,
+      "s": 640,
+      "m": 640,
+      "c": 640
+    },
+    "task_sizes": {
+      "detect": {
+        "t": 640,
+        "s": 640,
+        "m": 640,
+        "c": 640
+      }
+    },
+    "export_override": "none",
+    "optional_extra": null,
+    "available": true,
+    "group": "g1"
+  },
   "yolo9_e2e": {
     "class": "libreyolo.models.yolo9_e2e.model.LibreYOLO9E2E",
     "tasks": [
@@ -2010,6 +2041,43 @@
       "x": 640
     },
     "task_sizes": {},
+    "export_override": "none",
+    "optional_extra": null,
+    "available": true,
+    "group": "g2"
+  },
+  "yolox_drax_mobilenet_v3_large": {
+    "class": "libreyolo.models.yolox-drax-mobilenet-v3.model.LibreYOLOXDraxMobileNetV3Large",
+    "tasks": [
+      "detect"
+    ],
+    "default_task": "detect",
+    "sizes": {
+      "n": 416,
+      "t": 416,
+      "s": 640,
+      "m": 640,
+      "l": 640,
+      "x": 640
+    },
+    "default_imgsz": {
+      "n": 416,
+      "t": 416,
+      "s": 640,
+      "m": 640,
+      "l": 640,
+      "x": 640
+    },
+    "task_sizes": {
+      "detect": {
+        "n": 416,
+        "t": 416,
+        "s": 640,
+        "m": 640,
+        "l": 640,
+        "x": 640
+      }
+    },
     "export_override": "none",
     "optional_extra": null,
     "available": true,

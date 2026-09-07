@@ -403,3 +403,15 @@ wrap_libreyolo_checkpoint(...)
 unwrap_libreyolo_checkpoint(...)
 validate_checkpoint_metadata(...)
 ```
+
+## Drax MobileNetV3 Large detector checkpoints
+
+Families `yolo9_drax_mobilenet_v3_large` and
+`yolox_drax_mobilenet_v3_large` use the standard v1.0 wrapper. Their family
+identifier fixes the backbone architecture: torchvision MobileNetV3 Large,
+a 160-channel adapter, one efficient-attention Drax block, average fusion,
+and zero drop-path. `size` selects the parent detector neck/head size.
+No additional `drax` dictionary is required; the optional standard-YOLO9
+Drax configuration does not apply to these families. Input-normalization
+buffers are included in the state dict. Loading is strict and requires no
+ImageNet download.

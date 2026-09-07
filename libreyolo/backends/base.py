@@ -566,7 +566,7 @@ class BaseBackend(ABC):
             return fomo_preprocess_image(image, h, color_format=color_format)
         if self.task == "semantic":
             return self._preprocess_semantic(image, effective_imgsz, color_format)
-        if self.model_family == "yolox":
+        if self.model_family in {"yolox", "yolox_drax_mobilenet_v3_large"}:
             return yolox_preprocess_image(
                 image, input_size=effective_imgsz, color_format=color_format
             )
@@ -1264,7 +1264,7 @@ class BaseBackend(ABC):
                 max_det=max_det,
             )
 
-        if self.model_family == "yolox":
+        if self.model_family in {"yolox", "yolox_drax_mobilenet_v3_large"}:
             boxes, scores, cls = self._parse_yolox(
                 all_outputs, effective_imgsz, orig_w, orig_h, conf, ratio
             )
@@ -3882,6 +3882,8 @@ class BaseBackend(ABC):
             "yolo9": YOLO9ValPreprocessor,
             "yolo9_e2e": YOLO9E2EValPreprocessor,
             "yolo9_p2": YOLO9ValPreprocessor,
+            "yolo9_drax_mobilenet_v3_large": YOLO9ValPreprocessor,
+            "yolox_drax_mobilenet_v3_large": YOLOXValPreprocessor,
             "yolonas": YOLONASValPreprocessor,
             "yolox": YOLOXValPreprocessor,
         }.get(self.model_family, StandardValPreprocessor)

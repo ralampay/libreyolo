@@ -1058,6 +1058,7 @@ class LibreYOLO9Model(nn.Module):
         nb_classes=80,
         img_size=640,
         drax_config: DraxConfig | None = None,
+        backbone: nn.Module | None = None,
     ):
         """
         Initialize YOLOv9 model.
@@ -1085,9 +1086,9 @@ class LibreYOLO9Model(nn.Module):
 
         self.drax_config = drax_config if drax_config is not None else DraxConfig()
 
-        self.backbone = Backbone9(
-            config=config,
-            drax_config=self.drax_config,
+        self.backbone = (
+            backbone if backbone is not None
+            else Backbone9(config=config, drax_config=self.drax_config)
         )
 
         self.neck = Neck9(config)

@@ -86,6 +86,13 @@ def _register_cli_names_for_class(cls) -> None:
         if suffix:
             _CLI_NAME_TO_WEIGHTS[f"{cli_name}-{suffix}"] = weight_name
 
+    for alias in getattr(cls, "CLI_ALIASES", ()):
+        _CLI_NAME_TO_WEIGHTS[alias] = _weight_filename_for_cli(cls, cls.CLI_DEFAULT_SIZE)
+        for size_code in _task_sizes_for_cli(cls, default_task):
+            _CLI_NAME_TO_WEIGHTS[f"{alias}-{size_code}"] = _weight_filename_for_cli(
+                cls, size_code
+            )
+
     for task in getattr(cls, "SUPPORTED_TASKS", ("detect",)):
         if task == default_task:
             continue

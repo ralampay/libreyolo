@@ -65,6 +65,18 @@ def _add(
         SUPPORT[key] = entry
 
 
+_add(
+    "validated",
+    ("yolo9_drax_mobilenet_v3_large", "yolox_drax_mobilenet_v3_large"),
+    ("detect",),
+    ("onnx",),
+    since="2026-09-07",
+    constraint=(
+        "CPU FP32 tensor and preprocessing parity at size s, 64x64, static "
+        "and dynamic batch; tests/unit/test_drax_mobilenet_v3_export.py"
+    ),
+)
+
 # Existing parity-backed paths. New validated rows must land with a parity test.
 _add(
     "validated",

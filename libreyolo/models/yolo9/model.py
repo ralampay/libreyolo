@@ -72,6 +72,8 @@ class LibreYOLO9(BaseModel):
 
     @classmethod
     def can_load(cls, weights_dict: dict) -> bool:
+        if "backbone.adapter_down.weight" in weights_dict:
+            return False
         keys_lower = [k.lower() for k in weights_dict]
         # Explicitly exclude E2E checkpoints so LibreYOLO9E2E.can_load wins first.
         if any("one2one_cv2" in k or "one2one_cv3" in k for k in keys_lower):
@@ -634,6 +636,24 @@ class LibreYOLO9(BaseModel):
             "strides": [16],
         }
 
+    def _initialize_training_weights(self, pretrained, resume):
+        if resume and pretrained:
+            raise ValueError("pretrained transfer cannot be combined with resume=True.")
+
+        if pretrained:
+            transfer_weights: str | Path
+            if pretrained is True:
+                transfer_weights = self._default_transfer_weights_name()
+            else:
+                transfer_weights = pretrained
+            stats = self._load_transfer_weights(transfer_weights)
+            logger.info(
+                "Loaded %d transfer tensors from %s; skipped %d incompatible tensors.",
+                stats["loaded"],
+                transfer_weights,
+                stats["skipped"],
+            )
+
     @ddp_aware()
     def train(
         self,
@@ -732,22 +752,7 @@ class LibreYOLO9(BaseModel):
                 yaml_names = {i: n for i, n in enumerate(yaml_names)}
             self.names = self._sanitize_names(yaml_names, self.nb_classes)
 
-        if resume and pretrained:
-            raise ValueError("pretrained transfer cannot be combined with resume=True.")
-
-        if pretrained:
-            transfer_weights: str | Path
-            if pretrained is True:
-                transfer_weights = self._default_transfer_weights_name()
-            else:
-                transfer_weights = pretrained
-            stats = self._load_transfer_weights(transfer_weights)
-            logger.info(
-                "Loaded %d transfer tensors from %s; skipped %d incompatible tensors.",
-                stats["loaded"],
-                transfer_weights,
-                stats["skipped"],
-            )
+        self._initialize_training_weights(pretrained, resume)
 
         trainer_kwargs = dict(
             model=self.model,
