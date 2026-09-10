@@ -158,6 +158,31 @@ disabled. Early development checkpoints with `backbone.drax*` tensors but no
 metadata use a warning-backed best-effort stage inference; other Drax options
 cannot be recovered reliably and use the first supported experiment defaults.
 
+### YOLOX-Drax-MobileNetV3 IncrementalAdapter metadata
+
+Checkpoints for `model_family: yolox_drax_mobilenet_v3_large` may include an
+optional top-level `incremental_adapters` dictionary when the family-scoped
+experimental adapters are attached:
+
+```python
+{
+    "version": 1,
+    "enabled": True,
+    "features": ["p3", "p4", "p5"],
+    "reduction": 16,
+    "minimum_channels": 8,
+    "spatial": True,
+    "alpha": 1.0,
+    "hidden_channels": {"p3": 8, "p4": 16, "p5": 32},
+}
+```
+
+The dictionary records the graph needed to restore
+`incremental_adapters.*` tensors before strict state-dict loading. It is
+optional so foundation checkpoints created before adapter support retain their
+original strict-loading behavior. This metadata and namespace are not valid
+for other model families.
+
 ## Export Runtime Metadata
 
 Checkpoint and export runtime metadata use the same rectangular dual-write

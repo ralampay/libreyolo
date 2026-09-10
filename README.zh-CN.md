@@ -37,6 +37,8 @@ pip install -e .
 
 ONNX Runtime、OpenVINO、TensorRT、NCNN 和 RF-DETR 等可选运行时与导出依赖，请见[完整文档](https://www.libreyolo.com/docs)。
 
+YOLOX-Drax-MobileNetV3 的实验性 PEFT 功能见 [IncrementalAdapters 文档](docs/INCREMENTAL_ADAPTERS.md)。
+
 ```python
 from libreyolo import LibreYOLO, SAMPLE_IMAGE
 

@@ -161,6 +161,7 @@ Support varies by family and task, see the
 ## Documentation
 
 - [Docs](https://www.libreyolo.com/docs) covers install, tasks, models, training, prediction, export and the CLI
+- [IncrementalAdapters](docs/INCREMENTAL_ADAPTERS.md) documents experimental PEFT for YOLOX-Drax-MobileNetV3
 - [Benchmarks](https://www.visionanalysis.org/) for independent numbers
 - [CHANGELOG.md](CHANGELOG.md) for what changed
 

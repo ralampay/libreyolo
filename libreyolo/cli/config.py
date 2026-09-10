@@ -529,6 +529,20 @@ def build_family_train_kwargs(
             if cli_name not in provided:
                 kwargs.pop(internal_name, None)
         return kwargs
+    if family == "yolox_drax_mobilenet_v3_large":
+        kwargs = build_train_kwargs(params)
+        for name in (
+            "incremental_adapter",
+            "incremental_adapter_train_only",
+            "incremental_adapter_reduction",
+            "incremental_adapter_spatial",
+            "incremental_adapter_alpha",
+            "incremental_adapter_train_head",
+            "incremental_adapter_features",
+        ):
+            if name in params:
+                kwargs[name] = params[name]
+        return kwargs
     return build_train_kwargs(params)
 
 

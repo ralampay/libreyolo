@@ -315,6 +315,41 @@ def train_cmd(
         "--lora",
         help="Enable LoRA fine-tuning for supported transformer families",
     ),
+    incremental_adapter: bool = typer.Option(
+        False,
+        "--incremental-adapter",
+        help="Enable YOLOX-Drax-MobileNetV3 IncrementalAdapters",
+    ),
+    incremental_adapter_train_only: bool = typer.Option(
+        False,
+        "--incremental-adapter-train-only",
+        help="Freeze the foundation detector and train IncrementalAdapters only",
+    ),
+    incremental_adapter_reduction: int = typer.Option(
+        16,
+        "--incremental-adapter-reduction",
+        help="IncrementalAdapter bottleneck reduction ratio",
+    ),
+    incremental_adapter_spatial: bool = typer.Option(
+        True,
+        "--incremental-adapter-spatial/--no-incremental-adapter-spatial",
+        help="Use the depthwise 3x3 IncrementalAdapter stage",
+    ),
+    incremental_adapter_alpha: float = typer.Option(
+        1.0,
+        "--incremental-adapter-alpha",
+        help="Fixed IncrementalAdapter residual scale",
+    ),
+    incremental_adapter_train_head: bool = typer.Option(
+        False,
+        "--incremental-adapter-train-head",
+        help="Also train the YOLOX head in adapter-only mode",
+    ),
+    incremental_adapter_features: str = typer.Option(
+        "p3,p4,p5",
+        "--incremental-adapter-features",
+        help="Comma-separated adapter scales: p3,p4,p5",
+    ),
     freeze: str = typer.Option(
         "",
         help="Freeze layers: int count, list of indices, or module name(s)",
@@ -407,6 +442,7 @@ def train_cmd(
 ) -> None:
     """Train a detection model on a dataset."""
     import ast
+    import math
 
     out = OutputHandler(json_mode=json_output, quiet=quiet)
 
@@ -569,6 +605,13 @@ def train_cmd(
         "amp_dtype": amp_dtype,
         "cuda_graph": cuda_graph,
         "lora": lora,
+        "incremental_adapter": incremental_adapter,
+        "incremental_adapter_train_only": incremental_adapter_train_only,
+        "incremental_adapter_reduction": incremental_adapter_reduction,
+        "incremental_adapter_spatial": incremental_adapter_spatial,
+        "incremental_adapter_alpha": incremental_adapter_alpha,
+        "incremental_adapter_train_head": incremental_adapter_train_head,
+        "incremental_adapter_features": incremental_adapter_features,
         "freeze": freeze_val,
         "optimizer": optimizer,
         "lr0": lr0,
@@ -624,6 +667,70 @@ def train_cmd(
             ),
         )
 
+    incremental_options = {
+        "incremental_adapter",
+        "incremental_adapter_train_only",
+        "incremental_adapter_reduction",
+        "incremental_adapter_spatial",
+        "incremental_adapter_alpha",
+        "incremental_adapter_train_head",
+        "incremental_adapter_features",
+    }
+    if (
+        family != "yolox_drax_mobilenet_v3_large"
+        and incremental_options & user_provided
+    ):
+        exit_with_error(
+            out,
+            "config_unsupported",
+            "IncrementalAdapters are supported only for "
+            "yolox-drax-mobilenet-v3-large.",
+        )
+    if params["incremental_adapter_train_only"] and not params["incremental_adapter"]:
+        exit_with_error(
+            out,
+            "config_type_error",
+            "incremental_adapter_train_only=true requires incremental_adapter=true.",
+        )
+    if (
+        params["incremental_adapter_train_head"]
+        and not params["incremental_adapter_train_only"]
+    ):
+        exit_with_error(
+            out,
+            "config_type_error",
+            "incremental_adapter_train_head=true requires "
+            "incremental_adapter_train_only=true.",
+        )
+    if params["incremental_adapter_reduction"] < 1:
+        exit_with_error(
+            out,
+            "config_type_error",
+            "incremental_adapter_reduction must be >= 1.",
+        )
+    if not math.isfinite(params["incremental_adapter_alpha"]):
+        exit_with_error(
+            out,
+            "config_type_error",
+            "incremental_adapter_alpha must be finite.",
+        )
+    incremental_features = [
+        name.strip().lower()
+        for name in params["incremental_adapter_features"].split(",")
+        if name.strip()
+    ]
+    if (
+        not incremental_features
+        or len(incremental_features) != len(set(incremental_features))
+        or set(incremental_features) - {"p3", "p4", "p5"}
+    ):
+        exit_with_error(
+            out,
+            "config_type_error",
+            "incremental_adapter_features must be a unique comma-separated "
+            "selection from p3,p4,p5.",
+        )
+
     # Warn when explicitly-set params are ignored by the selected family
     # (spec-driven; see libreyolo/data/augment/spec.py).
     ignored_warnings = []
@@ -660,6 +767,9 @@ def train_cmd(
             resolved_config["freeze"] = params["freeze"]
         if params.get("lora"):
             resolved_config["lora"] = True
+        if family == "yolox_drax_mobilenet_v3_large":
+            for option in sorted(incremental_options):
+                resolved_config[option] = params[option]
         if params.get("distill_model"):
             resolved_config["distill_model"] = params["distill_model"]
             resolved_config["distill_loss_type"] = params["distill_loss_type"]
