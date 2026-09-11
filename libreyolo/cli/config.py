@@ -534,6 +534,7 @@ def build_family_train_kwargs(
         for name in (
             "incremental_adapter",
             "incremental_adapter_train_only",
+            "incremental_adapter_type",
             "incremental_adapter_reduction",
             "incremental_adapter_spatial",
             "incremental_adapter_alpha",

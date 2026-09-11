@@ -8,6 +8,7 @@ from torch import nn
 
 from ...training.config import YOLOXConfig
 from ..yolox.trainer import YOLOXTrainer
+from .incremental_adapters import normalize_incremental_adapter_type
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class YOLOXDraxMobileNetV3LargeConfig(YOLOXConfig):
 
     incremental_adapter: bool = False
     incremental_adapter_train_only: bool = False
+    incremental_adapter_type: str | None = None
     incremental_adapter_reduction: int = 16
     incremental_adapter_spatial: bool = True
     incremental_adapter_alpha: float = 1.0
@@ -61,8 +63,21 @@ class YOLOXDraxMobileNetV3LargeTrainer(YOLOXTrainer):
 
         backbone = self.model.backbone.backbone
         if enabled:
-            if not backbone.incremental_adapters:
+            current = backbone.incremental_adapter_config()
+            adapter_type = self.config.incremental_adapter_type or (
+                current["type"] if current["features"] else "conv_bottleneck"
+            )
+            adapter_type = normalize_incremental_adapter_type(adapter_type)
+            if backbone.incremental_adapters:
+                if current["type"] != adapter_type:
+                    raise ValueError(
+                        "IncrementalAdapters are already attached with type "
+                        f"{current['type']!r}; load a foundation checkpoint to "
+                        f"attach {adapter_type!r}."
+                    )
+            else:
                 backbone.attach_incremental_adapters(
+                    adapter_type=adapter_type,
                     reduction=int(self.config.incremental_adapter_reduction),
                     spatial=bool(self.config.incremental_adapter_spatial),
                     alpha=float(self.config.incremental_adapter_alpha),

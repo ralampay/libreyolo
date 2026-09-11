@@ -117,6 +117,23 @@ BatchNorm inside the adapter. Set `incremental_adapter_spatial=false` for the
 1x1-only ablation, or select a subset with
 `incremental_adapter_features=p3,p5`.
 
+### Built-in adapter registry
+
+Adapter construction is isolated behind a registry scoped to this model
+family. The current architecture is registered as `conv_bottleneck` and is the
+default. Select it explicitly with
+`incremental_adapter_type=conv_bottleneck`. A new reviewed architecture can be
+added by implementing the registered adapter contract and adding one registry
+entry; the P3/P4/P5 attachment, hard bypass, freezing, and optimizer logic do
+not need to change.
+
+Registered adapters must preserve feature shape, dtype, and device, start as a
+zero-initialized residual identity, serialize their construction settings, and
+support strict reconstruction from checkpoints. Runtime module paths and
+checkpoint-triggered third-party imports are intentionally unsupported. New
+implementations must document their literature basis and compatible code
+provenance.
+
 For size `s` with 80 classes, the foundation has 8,829,839 parameters. The
 default three adapters add 44,520 parameters: 2,264 at P3, 8,624 at P4, and
 33,632 at P5. Adapter-only training therefore updates 44,520 of 8,874,359
@@ -148,7 +165,8 @@ optimizes only `incremental_adapters.*`:
 
 ```bash
 libreyolo train model=foundation.pt data=D1.yaml name=model-b \
-  incremental_adapter=true incremental_adapter_train_only=true
+  incremental_adapter=true incremental_adapter_train_only=true \
+  incremental_adapter_type=conv_bottleneck
 ```
 
 The optional head ablation adds

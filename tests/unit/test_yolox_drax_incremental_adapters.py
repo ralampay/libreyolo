@@ -28,6 +28,12 @@ def _adapter_class():
     return module.IncrementalAdapter
 
 
+def _adapter_registry_module():
+    return importlib.import_module(
+        "libreyolo.models.yolox-drax-mobilenet-v3.incremental_adapters"
+    )
+
+
 def _wrapper(nb_classes=2):
     wrapper = LibreYOLOXDraxMobileNetV3Large(
         None, size="s", nb_classes=nb_classes, device="cpu"
@@ -65,6 +71,37 @@ def test_incremental_adapter_preserves_shape_dtype_and_zero_init_identity():
     torch.testing.assert_close(output, sample, rtol=0, atol=0)
     assert torch.count_nonzero(adapter.up.weight) == 0
     assert torch.count_nonzero(adapter.up.bias) == 0
+
+
+def test_incremental_adapter_registry_exposes_default_and_rejects_unknown():
+    registry = _adapter_registry_module()
+    assert registry.available_incremental_adapter_types() == ("conv_bottleneck",)
+    assert (
+        registry.get_incremental_adapter_class("conv-bottleneck")
+        is registry.ConvolutionalBottleneckIncrementalAdapter
+    )
+    with pytest.raises(ValueError, match="available: conv_bottleneck"):
+        registry.get_incremental_adapter_class("unknown")
+
+
+@pytest.mark.parametrize(
+    "adapter_type", _adapter_registry_module().available_incremental_adapter_types()
+)
+def test_every_registered_adapter_starts_as_shape_preserving_identity(adapter_type):
+    registry = _adapter_registry_module()
+    adapter = registry.get_incremental_adapter_class(adapter_type).from_config(
+        32,
+        reduction=16,
+        minimum_channels=8,
+        spatial=True,
+        alpha=1.0,
+    )
+    sample = torch.randn(2, 32, 7, 11)
+    output = adapter(sample)
+    assert output.shape == sample.shape
+    assert output.dtype == sample.dtype
+    assert output.device == sample.device
+    torch.testing.assert_close(output, sample, rtol=0, atol=0)
 
 
 def test_attached_adapters_inherit_foundation_device_and_dtype():
@@ -151,6 +188,7 @@ def test_adapter_checkpoint_save_restore_preserves_structure_state_and_output(
 
     loaded = LibreYOLO(path, device="cpu")
     config = loaded._mobile_backbone().incremental_adapter_config()
+    assert config["type"] == "conv_bottleneck"
     assert config["enabled"] is True
     assert config["features"] == ["p3", "p5"]
     assert config["spatial"] is False
@@ -158,6 +196,39 @@ def test_adapter_checkpoint_save_restore_preserves_structure_state_and_output(
     with torch.no_grad():
         actual = _prediction(loaded.model, sample)
     torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+def test_legacy_adapter_checkpoint_without_type_metadata_restores(tmp_path):
+    from libreyolo.utils.serialization import load_trusted_torch_file
+
+    wrapper = _wrapper()
+    wrapper.attach_incremental_adapters(features=("p4",))
+    wrapper.enable_incremental_adapters()
+    path = wrapper.save(str(tmp_path / "typed.pt"))
+    checkpoint = load_trusted_torch_file(path)
+    checkpoint["incremental_adapters"].pop("type")
+    legacy_path = tmp_path / "legacy-adapter.pt"
+    torch.save(checkpoint, legacy_path)
+
+    loaded = LibreYOLO(str(legacy_path), device="cpu")
+    config = loaded._mobile_backbone().incremental_adapter_config()
+    assert config["type"] == "conv_bottleneck"
+    assert config["features"] == ["p4"]
+
+
+def test_unknown_checkpoint_adapter_type_fails_loudly(tmp_path):
+    from libreyolo.utils.serialization import load_trusted_torch_file
+
+    wrapper = _wrapper()
+    wrapper.attach_incremental_adapters()
+    path = wrapper.save(str(tmp_path / "known.pt"))
+    checkpoint = load_trusted_torch_file(path)
+    checkpoint["incremental_adapters"]["type"] = "unknown"
+    unknown_path = tmp_path / "unknown.pt"
+    torch.save(checkpoint, unknown_path)
+
+    with pytest.raises(RuntimeError, match="Unknown incremental_adapter_type"):
+        LibreYOLO(str(unknown_path), device="cpu")
 
 
 def test_adapter_enabled_raw_state_dict_restores_strictly():
@@ -169,6 +240,7 @@ def test_adapter_enabled_raw_state_dict_restores_strictly():
         state, size="s", nb_classes=2, device="cpu"
     )
     config = loaded._mobile_backbone().incremental_adapter_config()
+    assert config["type"] == "conv_bottleneck"
     assert config["features"] == ["p4"]
     assert config["hidden_channels"] == {"p4": 64}
     assert config["enabled"] is True
@@ -291,6 +363,30 @@ def test_adapter_only_requires_a_loaded_foundation_checkpoint():
         )
 
 
+def test_python_api_rejects_adapter_type_without_enablement():
+    wrapper = _wrapper()
+    with pytest.raises(ValueError, match="requires incremental_adapter=True"):
+        wrapper.train(
+            data="unused.yaml",
+            incremental_adapter_type="conv_bottleneck",
+            device="cpu",
+        )
+
+
+def test_trainer_uses_type_from_an_attached_adapter():
+    wrapper = _wrapper()
+    wrapper.attach_incremental_adapters(adapter_type="conv_bottleneck")
+    trainer = _trainer(
+        wrapper,
+        incremental_adapter=True,
+        incremental_adapter_train_only=True,
+    )
+    assert (
+        trainer.model.backbone.backbone.incremental_adapter_config()["type"]
+        == "conv_bottleneck"
+    )
+
+
 @pytest.mark.parametrize("key_value", [True, False])
 def test_cli_adapter_options_support_both_grammars(key_value):
     import json
@@ -308,6 +404,7 @@ def test_cli_adapter_options_support_both_grammars(key_value):
         "data=unused.yaml",
         "incremental_adapter=true",
         "incremental_adapter_train_only=true",
+        "incremental_adapter_type=conv-bottleneck",
         "incremental_adapter_spatial=false",
     ]
     args = (
@@ -320,6 +417,8 @@ def test_cli_adapter_options_support_both_grammars(key_value):
             "unused.yaml",
             "--incremental-adapter",
             "--incremental-adapter-train-only",
+            "--incremental-adapter-type",
+            "conv-bottleneck",
             "--no-incremental-adapter-spatial",
         ]
     )
@@ -328,7 +427,38 @@ def test_cli_adapter_options_support_both_grammars(key_value):
     config = json.loads(result.stdout)["resolved_config"]
     assert config["incremental_adapter"] is True
     assert config["incremental_adapter_train_only"] is True
+    assert config["incremental_adapter_type"] == "conv_bottleneck"
     assert config["incremental_adapter_spatial"] is False
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        (["incremental_adapter=true", "incremental_adapter_type=unknown"], "Unknown"),
+        (["incremental_adapter_type=conv_bottleneck"], "requires incremental_adapter"),
+    ],
+)
+def test_cli_adapter_type_rejects_invalid_selection(extra, message):
+    import typer
+    from typer.testing import CliRunner
+
+    from libreyolo.cli.commands.train import train_cmd
+    from libreyolo.cli.parsing import KeyValueCommand
+
+    app = typer.Typer()
+    app.command(cls=KeyValueCommand)(train_cmd)
+    result = CliRunner().invoke(
+        app,
+        [
+            "model=yolox-drax-mobilenet-v3-large",
+            "data=unused.yaml",
+            *extra,
+            "--dry-run",
+            "--json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert message in result.stdout
 
 
 def test_family_cli_builder_forwards_incremental_options():
@@ -338,6 +468,7 @@ def test_family_cli_builder_forwards_incremental_options():
         "epochs": 1,
         "incremental_adapter": True,
         "incremental_adapter_train_only": True,
+        "incremental_adapter_type": "conv_bottleneck",
         "incremental_adapter_reduction": 8,
         "incremental_adapter_spatial": False,
         "incremental_adapter_alpha": 0.5,
@@ -348,6 +479,7 @@ def test_family_cli_builder_forwards_incremental_options():
         params, "yolox_drax_mobilenet_v3_large"
     )
     assert kwargs["incremental_adapter"] is True
+    assert kwargs["incremental_adapter_type"] == "conv_bottleneck"
     assert kwargs["incremental_adapter_reduction"] == 8
     assert kwargs["incremental_adapter_features"] == "p3,p5"
 
@@ -373,11 +505,13 @@ def test_python_train_api_reaches_family_trainer(monkeypatch):
         data="unused.yaml",
         incremental_adapter=True,
         incremental_adapter_train_only=True,
+        incremental_adapter_type="conv-bottleneck",
         incremental_adapter_reduction=8,
         incremental_adapter_features="p3,p5",
         device="cpu",
     )
     assert captured["config"].incremental_adapter_reduction == 8
+    assert captured["config"].incremental_adapter_type == "conv_bottleneck"
     assert captured["config"].incremental_adapter_features == "p3,p5"
     assert results["training_time_seconds"] >= 0
     assert results["parameter_counts"]["trainable_parameters"] == results[
@@ -446,6 +580,7 @@ def test_cli_help_json_exposes_incremental_adapter_options():
     assert {
         "incremental_adapter",
         "incremental_adapter_train_only",
+        "incremental_adapter_type",
         "incremental_adapter_reduction",
         "incremental_adapter_spatial",
         "incremental_adapter_alpha",

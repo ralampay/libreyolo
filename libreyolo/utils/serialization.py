@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import math
 import warnings
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -367,6 +368,96 @@ def validate_checkpoint_metadata(
                     or not 0.0 <= float(drop_path) < 1.0
                 ):
                     errors.append("drax.drop_path must satisfy 0 <= value < 1.")
+
+        if "incremental_adapters" in checkpoint:
+            adapters = checkpoint["incremental_adapters"]
+            required_adapter_keys = {
+                "version",
+                "enabled",
+                "features",
+                "reduction",
+                "minimum_channels",
+                "spatial",
+                "alpha",
+                "hidden_channels",
+            }
+            allowed_adapter_keys = required_adapter_keys | {"type"}
+            if checkpoint.get("model_family") != "yolox_drax_mobilenet_v3_large":
+                errors.append(
+                    "incremental_adapters metadata is valid only for "
+                    "model_family='yolox_drax_mobilenet_v3_large'."
+                )
+            if not isinstance(adapters, dict):
+                errors.append("incremental_adapters must be a dictionary.")
+            else:
+                missing = sorted(required_adapter_keys - set(adapters))
+                unexpected = sorted(set(adapters) - allowed_adapter_keys)
+                if missing or unexpected:
+                    errors.append(
+                        "incremental_adapters fields are invalid: "
+                        f"missing={missing}, unexpected={unexpected}."
+                    )
+                version_value = adapters.get("version")
+                if (
+                    not isinstance(version_value, int)
+                    or isinstance(version_value, bool)
+                    or version_value != 1
+                ):
+                    errors.append("incremental_adapters.version must be the integer 1.")
+                adapter_type = adapters.get("type")
+                if "type" in adapters and not (
+                    isinstance(adapter_type, str) and adapter_type
+                ):
+                    errors.append("incremental_adapters.type must be a non-empty string.")
+                for key in ("enabled", "spatial"):
+                    if not isinstance(adapters.get(key), bool):
+                        errors.append(f"incremental_adapters.{key} must be a bool.")
+                for key in ("reduction", "minimum_channels"):
+                    value = adapters.get(key)
+                    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                        errors.append(
+                            f"incremental_adapters.{key} must be a positive int."
+                        )
+                alpha = adapters.get("alpha")
+                if (
+                    isinstance(alpha, bool)
+                    or not isinstance(alpha, (int, float))
+                    or not math.isfinite(float(alpha))
+                ):
+                    errors.append("incremental_adapters.alpha must be finite.")
+                features = adapters.get("features")
+                valid_features = {"p3", "p4", "p5"}
+                if (
+                    not isinstance(features, list)
+                    or not features
+                    or not all(isinstance(feature, str) for feature in features)
+                    or len(features) != len(set(features))
+                    or any(feature not in valid_features for feature in features)
+                ):
+                    errors.append(
+                        "incremental_adapters.features must be a non-empty unique "
+                        "list containing only p3, p4, and p5."
+                    )
+                hidden_channels = adapters.get("hidden_channels")
+                if not isinstance(hidden_channels, dict) or any(
+                    not isinstance(name, str)
+                    or not isinstance(value, int)
+                    or isinstance(value, bool)
+                    or value < 1
+                    for name, value in (
+                        hidden_channels.items()
+                        if isinstance(hidden_channels, dict)
+                        else ()
+                    )
+                ):
+                    errors.append(
+                        "incremental_adapters.hidden_channels must map feature "
+                        "names to positive ints."
+                    )
+                elif isinstance(features, list) and set(hidden_channels) != set(features):
+                    errors.append(
+                        "incremental_adapters.hidden_channels keys must match features."
+                    )
 
     if strict and errors:
         raise CheckpointMetadataError("; ".join(errors))

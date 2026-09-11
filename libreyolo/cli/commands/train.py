@@ -325,6 +325,14 @@ def train_cmd(
         "--incremental-adapter-train-only",
         help="Freeze the foundation detector and train IncrementalAdapters only",
     ),
+    incremental_adapter_type: Optional[str] = typer.Option(
+        None,
+        "--incremental-adapter-type",
+        help=(
+            "Registered YOLOX-Drax-MobileNetV3 IncrementalAdapter architecture "
+            "(default: checkpoint type or conv_bottleneck)"
+        ),
+    ),
     incremental_adapter_reduction: int = typer.Option(
         16,
         "--incremental-adapter-reduction",
@@ -607,6 +615,7 @@ def train_cmd(
         "lora": lora,
         "incremental_adapter": incremental_adapter,
         "incremental_adapter_train_only": incremental_adapter_train_only,
+        "incremental_adapter_type": incremental_adapter_type,
         "incremental_adapter_reduction": incremental_adapter_reduction,
         "incremental_adapter_spatial": incremental_adapter_spatial,
         "incremental_adapter_alpha": incremental_adapter_alpha,
@@ -670,6 +679,7 @@ def train_cmd(
     incremental_options = {
         "incremental_adapter",
         "incremental_adapter_train_only",
+        "incremental_adapter_type",
         "incremental_adapter_reduction",
         "incremental_adapter_spatial",
         "incremental_adapter_alpha",
@@ -692,6 +702,32 @@ def train_cmd(
             "config_type_error",
             "incremental_adapter_train_only=true requires incremental_adapter=true.",
         )
+    normalized_adapter_type = None
+    if params["incremental_adapter_type"] is not None:
+        from importlib import import_module
+
+        adapter_registry = import_module(
+            "libreyolo.models.yolox-drax-mobilenet-v3.incremental_adapters"
+        )
+        try:
+            normalized_adapter_type = (
+                adapter_registry.normalize_incremental_adapter_type(
+                    params["incremental_adapter_type"]
+                )
+            )
+        except ValueError as exc:
+            exit_with_error(
+                out,
+                "config_type_error",
+                str(exc),
+            )
+        if not params["incremental_adapter"]:
+            exit_with_error(
+                out,
+                "config_type_error",
+                "incremental_adapter_type requires incremental_adapter=true.",
+            )
+    params["incremental_adapter_type"] = normalized_adapter_type
     if (
         params["incremental_adapter_train_head"]
         and not params["incremental_adapter_train_only"]

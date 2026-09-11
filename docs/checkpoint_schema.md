@@ -142,6 +142,7 @@ before their state dictionary is applied:
 ```python
 {
     "version": 1,
+    "type": "conv_bottleneck",
     "enabled": True,
     "stages": ["b5"],
     "use_attention": True,
@@ -181,7 +182,10 @@ The dictionary records the graph needed to restore
 `incremental_adapters.*` tensors before strict state-dict loading. It is
 optional so foundation checkpoints created before adapter support retain their
 original strict-loading behavior. This metadata and namespace are not valid
-for other model families.
+for other model families. `type` is the canonical key in the family's built-in
+adapter registry. Adapter checkpoints created before the registry omit it and
+load as `conv_bottleneck`. Unknown types fail before strict state-dict loading;
+they never silently fall back to another architecture.
 
 ## Export Runtime Metadata
 

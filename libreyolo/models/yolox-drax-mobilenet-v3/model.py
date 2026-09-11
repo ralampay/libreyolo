@@ -12,6 +12,12 @@ import torch
 
 from ..drax_mobilenet_v3.model import DraxMobileNetVariant
 from ..yolox.model import LibreYOLOX
+from .incremental_adapters import (
+    available_incremental_adapter_types,
+    get_incremental_adapter_class,
+    infer_incremental_adapter_type,
+    normalize_incremental_adapter_type,
+)
 from .nn import IncrementalYOLOXBackbone, YOLOXDraxMobileNetV3LargeModel
 from .trainer import YOLOXDraxMobileNetV3LargeConfig
 
@@ -45,6 +51,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         if spec:
             backbone = model.backbone.backbone
             backbone.attach_incremental_adapters(
+                adapter_type=spec["type"],
                 reduction=spec["reduction"],
                 minimum_channels=spec["minimum_channels"],
                 spatial=spec["spatial"],
@@ -66,11 +73,13 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         minimum_channels: int = 8,
         spatial: bool = True,
         alpha: float = 1.0,
+        adapter_type: str = "conv_bottleneck",
         features: str | tuple[str, ...] = ("p3", "p4", "p5"),
     ) -> dict[str, int | float]:
         """Attach zero-initialized P3/P4/P5 adapters without changing outputs."""
         backbone = self._mobile_backbone()
         backbone.attach_incremental_adapters(
+            adapter_type=adapter_type,
             reduction=reduction,
             minimum_channels=minimum_channels,
             spatial=spatial,
@@ -130,6 +139,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         self._incremental_adapter_spec = spec
         backbone = self._mobile_backbone()
         backbone.attach_incremental_adapters(
+            adapter_type=spec["type"],
             reduction=spec["reduction"],
             minimum_channels=spec["minimum_channels"],
             spatial=spec["spatial"],
@@ -146,12 +156,10 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
     ) -> dict[str, Any] | None:
         prefix = "backbone.backbone.incremental_adapters."
         features = []
-        hidden_channels = {}
         for name in IncrementalYOLOXBackbone.feature_names:
-            down_key = f"{prefix}{name}.down.weight"
-            if down_key in state_dict:
+            feature_prefix = f"{prefix}{name}."
+            if any(key.startswith(feature_prefix) for key in state_dict):
                 features.append(name)
-                hidden_channels[name] = int(state_dict[down_key].shape[0])
         if not features:
             return None
 
@@ -161,36 +169,32 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
                 "Unsupported IncrementalAdapter checkpoint version: "
                 f"{config.get('version')!r}"
             )
-        first = features[0]
-        channels = int(state_dict[f"{prefix}{first}.down.weight"].shape[1])
-        hidden = hidden_channels[first]
-        alpha_tensor = state_dict.get(f"{prefix}{first}.alpha")
-        alpha = (
-            float(alpha_tensor.item())
-            if alpha_tensor is not None
-            else float(config.get("alpha", 1.0))
-        )
-        spatial = bool(
-            config.get(
-                "spatial",
-                any(
-                    f"{prefix}{name}.spatial.weight" in state_dict
-                    for name in features
-                ),
+        adapter_type = (
+            normalize_incremental_adapter_type(config["type"])
+            if config.get("type")
+            else infer_incremental_adapter_type(
+                state_dict, prefix, tuple(features)
             )
+        )
+        adapter_class = get_incremental_adapter_class(adapter_type)
+        adapter_config = adapter_class.config_from_state_dict(
+            state_dict,
+            prefix,
+            tuple(features),
+            config,
         )
         return {
             "version": 1,
+            "type": adapter_type,
             "enabled": bool(config.get("enabled", True)),
             "features": features,
-            "reduction": int(config.get("reduction", max(1, channels // hidden))),
-            "minimum_channels": int(
-                config.get("minimum_channels", min(hidden_channels.values()))
-            ),
-            "spatial": spatial,
-            "alpha": alpha,
-            "hidden_channels": hidden_channels,
+            **adapter_config,
         }
+
+    @staticmethod
+    def available_incremental_adapter_types() -> tuple[str, ...]:
+        """Return the adapter architectures built into this model family."""
+        return available_incremental_adapter_types()
 
     def _filter_incoming_state_dict(
         self,
@@ -263,6 +267,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         loggers=None,
         incremental_adapter: bool = False,
         incremental_adapter_train_only: bool = False,
+        incremental_adapter_type: str | None = None,
         incremental_adapter_reduction: int = 16,
         incremental_adapter_spatial: bool = True,
         incremental_adapter_alpha: float = 1.0,
@@ -274,6 +279,19 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         if incremental_adapter_train_only and not incremental_adapter:
             raise ValueError(
                 "incremental_adapter_train_only=True requires incremental_adapter=True"
+            )
+        attached_config = self._mobile_backbone().incremental_adapter_config()
+        resolved_adapter_type = normalize_incremental_adapter_type(
+            incremental_adapter_type
+            or (
+                attached_config["type"]
+                if attached_config["features"]
+                else "conv_bottleneck"
+            )
+        )
+        if not incremental_adapter and incremental_adapter_type is not None:
+            raise ValueError(
+                "incremental_adapter_type requires incremental_adapter=True"
             )
         if incremental_adapter_train_head and not incremental_adapter_train_only:
             raise ValueError(
@@ -305,6 +323,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
                 loggers=loggers,
                 incremental_adapter=incremental_adapter,
                 incremental_adapter_train_only=incremental_adapter_train_only,
+                incremental_adapter_type=resolved_adapter_type,
                 incremental_adapter_reduction=incremental_adapter_reduction,
                 incremental_adapter_spatial=incremental_adapter_spatial,
                 incremental_adapter_alpha=incremental_adapter_alpha,

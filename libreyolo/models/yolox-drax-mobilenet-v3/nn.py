@@ -2,75 +2,22 @@
 
 from collections.abc import Iterable, Mapping
 
-import torch
 from torch import nn
 
 from ..drax_mobilenet_v3.backbone import YOLOXBackbone
 from ..yolox.nn import LibreYOLOXModel
+from .incremental_adapters import (
+    IncrementalAdapter,
+    RegisteredIncrementalAdapter,
+    get_incremental_adapter_class,
+    normalize_incremental_adapter_type,
+)
 
-
-class IncrementalAdapter(nn.Module):
-    """Residual convolutional PEFT adapter inspired by YOLO-Adapter.
-
-    This is an independent project-specific implementation, not a reproduction
-    of that paper's architecture. See ``docs/INCREMENTAL_ADAPTERS.md``.
-    """
-
-    def __init__(
-        self,
-        channels: int,
-        *,
-        reduction: int = 16,
-        minimum_channels: int = 8,
-        spatial: bool = True,
-        alpha: float = 1.0,
-        hidden_channels: int | None = None,
-    ):
-        super().__init__()
-        if channels < 1:
-            raise ValueError("channels must be >= 1")
-        if reduction < 1:
-            raise ValueError("reduction must be >= 1")
-        if minimum_channels < 1:
-            raise ValueError("minimum_channels must be >= 1")
-        hidden = (
-            int(hidden_channels)
-            if hidden_channels is not None
-            else max(channels // reduction, minimum_channels)
-        )
-        if hidden < 1:
-            raise ValueError("hidden_channels must be >= 1")
-
-        self.channels = int(channels)
-        self.hidden_channels = hidden
-        self.reduction = int(reduction)
-        self.minimum_channels = int(minimum_channels)
-        self.spatial_enabled = bool(spatial)
-        self.down = nn.Conv2d(channels, hidden, kernel_size=1)
-        self.activation = nn.SiLU()
-        self.spatial = (
-            nn.Conv2d(
-                hidden,
-                hidden,
-                kernel_size=3,
-                padding=1,
-                groups=hidden,
-            )
-            if spatial
-            else nn.Identity()
-        )
-        self.up = nn.Conv2d(hidden, channels, kernel_size=1)
-        self.register_buffer("alpha", torch.tensor(float(alpha)))
-
-        # A fresh enabled adapter is an exact residual identity at construction.
-        nn.init.zeros_(self.up.weight)
-        nn.init.zeros_(self.up.bias)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        z = self.activation(self.down(x))
-        if self.spatial_enabled:
-            z = self.activation(self.spatial(z))
-        return x + self.alpha.to(dtype=x.dtype) * self.up(z)
+__all__ = [
+    "IncrementalAdapter",
+    "IncrementalYOLOXBackbone",
+    "YOLOXDraxMobileNetV3LargeModel",
+]
 
 
 class IncrementalYOLOXBackbone(YOLOXBackbone):
@@ -117,13 +64,16 @@ class IncrementalYOLOXBackbone(YOLOXBackbone):
         minimum_channels: int = 8,
         spatial: bool = True,
         alpha: float = 1.0,
+        adapter_type: str = "conv_bottleneck",
         features: str | Iterable[str] = feature_names,
         hidden_channels: Mapping[str, int] | None = None,
     ) -> None:
         selected = self.normalize_feature_names(features)
+        normalized_type = normalize_incremental_adapter_type(adapter_type)
+        adapter_class = get_incremental_adapter_class(normalized_type)
         desired_hidden = dict(hidden_channels or {})
         desired = {
-            name: IncrementalAdapter(
+            name: adapter_class.from_config(
                 channels,
                 reduction=reduction,
                 minimum_channels=minimum_channels,
@@ -139,14 +89,21 @@ class IncrementalYOLOXBackbone(YOLOXBackbone):
             module.to(device=reference.device, dtype=reference.dtype)
             module.train(self.training)
         current = self.incremental_adapter_config()
-        requested_hidden = {
-            name: module.hidden_channels for name, module in desired.items()
-        }
         if self.incremental_adapters:
+            current_shapes = {
+                name: module.topology_signature()
+                for name, module in self.incremental_adapters.items()
+                if isinstance(module, RegisteredIncrementalAdapter)
+            }
+            desired_shapes = {
+                name: module.topology_signature()
+                for name, module in desired.items()
+                if isinstance(module, RegisteredIncrementalAdapter)
+            }
             same = (
-                tuple(current["features"]) == selected
-                and bool(current["spatial"]) == bool(spatial)
-                and current["hidden_channels"] == requested_hidden
+                current["type"] == normalized_type
+                and tuple(current["features"]) == selected
+                and current_shapes == desired_shapes
             )
             if not same:
                 raise ValueError(
@@ -155,7 +112,9 @@ class IncrementalYOLOXBackbone(YOLOXBackbone):
                     "ablation."
                 )
             for module in self.incremental_adapters.values():
-                module.alpha.fill_(float(alpha))
+                if not isinstance(module, RegisteredIncrementalAdapter):
+                    raise TypeError("Incremental adapter registry/module type mismatch")
+                module.set_alpha(alpha)
             return
         self.incremental_adapters.update(desired)
 
@@ -163,18 +122,29 @@ class IncrementalYOLOXBackbone(YOLOXBackbone):
         modules = self.incremental_adapters
         features = tuple(name for name in self.feature_names if name in modules)
         first = modules[features[0]] if features else None
-        return {
+        adapter_type = (
+            first.adapter_type
+            if isinstance(first, RegisteredIncrementalAdapter)
+            else "conv_bottleneck"
+        )
+        config = {
             "version": 1,
+            "type": adapter_type,
             "enabled": bool(self.incremental_adapter_enabled),
             "features": list(features),
-            "reduction": int(first.reduction) if first is not None else 16,
-            "minimum_channels": int(first.minimum_channels) if first is not None else 8,
-            "spatial": bool(first.spatial_enabled) if first is not None else True,
-            "alpha": float(first.alpha.item()) if first is not None else 1.0,
-            "hidden_channels": {
-                name: int(modules[name].hidden_channels) for name in features
-            },
         }
+        if first is None:
+            config.update(
+                reduction=16,
+                minimum_channels=8,
+                spatial=True,
+                alpha=1.0,
+                hidden_channels={},
+            )
+            return config
+        adapter_class = get_incremental_adapter_class(adapter_type)
+        config.update(adapter_class.config_from_modules(modules))
+        return config
 
     def enable_incremental_adapters(self) -> None:
         if not self.incremental_adapters:
