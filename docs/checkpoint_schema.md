@@ -433,6 +433,15 @@ unwrap_libreyolo_checkpoint(...)
 validate_checkpoint_metadata(...)
 ```
 
+## YOLOX CSP-Drax detector checkpoints
+
+The `yolox_drax_csp` family supports size `m` only. It keeps the YOLOX-M
+CSPDarknet depth and backbone width, refines P3 with a depthwise residual
+block, and applies a Drax residual block to a 160-channel P5 bottleneck.
+The PAN and head use width 0.6875. Checkpoints use the standard v1.0 wrapper
+with `model_family: yolox_drax_csp` and strict loading. The family is separate
+from `yolox_drax_mobilenet_v3_large`; no pretrained weights are required.
+
 ## Drax MobileNetV3 Large detector checkpoints
 
 Families `yolo9_drax_mobilenet_v3_large` and

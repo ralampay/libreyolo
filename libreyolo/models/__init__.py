@@ -55,6 +55,7 @@ LibreYOLO9DraxMobileNetV3Large = import_module(
 LibreYOLOXDraxMobileNetV3Large = import_module(
     ".yolox-drax-mobilenet-v3.model", __name__
 ).LibreYOLOXDraxMobileNetV3Large
+from .yolox_drax_csp.model import LibreYOLOXDraxCSPM  # noqa: E402
 from .yolo9_p2.model import LibreYOLO9P2  # noqa: E402  (must precede LibreYOLO9: P2 checkpoints also match the base backbone/neck patterns)
 from .yolo9.model import LibreYOLO9  # noqa: E402
 from .yolonas.model import LibreYOLONAS  # noqa: E402
@@ -793,6 +794,7 @@ __all__ = [
     "LibreYOLO9P2",
     "LibreYOLO9DraxMobileNetV3Large",
     "LibreYOLOXDraxMobileNetV3Large",
+    "LibreYOLOXDraxCSPM",
     "LibreYOLONAS",
     "LibreDFINE",
     "LibreDEIM",
