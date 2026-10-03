@@ -2,10 +2,17 @@
 
 from collections.abc import Iterable, Mapping
 
+import torch
 from torch import nn
 
 from ..drax_mobilenet_v3.backbone import YOLOXBackbone
 from ..yolox.nn import LibreYOLOXModel
+from .variants import (
+    BalancedDraxBlock,
+    PoolSpatialContext,
+    RefineSpatialFeatures,
+    validate_variant,
+)
 from .incremental_adapters import (
     IncrementalAdapter,
     RegisteredIncrementalAdapter,
@@ -25,10 +32,81 @@ class IncrementalYOLOXBackbone(YOLOXBackbone):
 
     feature_names = ("p3", "p4", "p5")
 
-    def __init__(self, out_channels, *, input_bgr=False):
+    def __init__(self, out_channels, *, input_bgr=False, architecture_variant="legacy"):
         super().__init__(out_channels, input_bgr=input_bgr)
+        self.architecture_variant = validate_variant(architecture_variant)
+        if architecture_variant in ("refine-p3p4", "pyramid-drax"):
+            self.feature_refiners = nn.ModuleList(
+                [RefineSpatialFeatures(c) for c in self.feature_channels[:2]]
+            )
+        if architecture_variant in ("spp-p5", "pyramid-drax"):
+            self.p5_pool = PoolSpatialContext()
+        if architecture_variant in ("balanced-drax", "pyramid-drax"):
+            self.drax_refiner = nn.Sequential(BalancedDraxBlock(160))
+        if architecture_variant == "pyramid-drax":
+            # The classifier's final 160 -> 960 expansion is not needed by a
+            # detector. Refine its compact stride-32 map before projection.
+            self.features = nn.Sequential(*list(self.features.children())[:-1])
+            self.feature_channels = (40, 112, 160)
+            self.adapter_down = nn.Identity()
+            self.adapter_norm = nn.Identity()
+            self.adapter_activation = nn.Identity()
+            self.adapter_up = nn.Identity()
+            self.adapter_up_norm = nn.Identity()
+            self.p5_pool = PoolSpatialContext(channels=160, hidden=80)
+            self.projections[2] = nn.Sequential(
+                nn.Conv2d(160, self.out_channels[2], 1, bias=False),
+                nn.BatchNorm2d(self.out_channels[2], eps=1e-3, momentum=0.03),
+                nn.SiLU(),
+            )
         self.incremental_adapters = nn.ModuleDict()
         self.incremental_adapter_enabled = False
+
+    def forward_features(self, x):
+        if (
+            self.architecture_variant == "pyramid-drax"
+            and x.device.type == "cuda"
+            and torch.is_autocast_enabled("cuda")
+        ):
+            # ROCm can fault in the MobileNet/Drax mixed-precision backward
+            # before YOLOX assignment. Keep the smaller backbone in FP32 while
+            # the substantially larger PAN and head retain AMP acceleration.
+            with torch.amp.autocast("cuda", enabled=False):
+                return self._forward_features(x.float())
+        return self._forward_features(x)
+
+    def _forward_features(self, x):
+        if self.architecture_variant == "pyramid-drax":
+            if self.input_bgr:
+                x = x[:, [2, 1, 0]] / 255.0
+            x = (x - self.mean.to(dtype=x.dtype)) / self.std.to(dtype=x.dtype)
+            outputs = []
+            for index, layer in enumerate(self.features):
+                x = layer(x)
+                if index in (6, 12):
+                    outputs.append(x)
+            p3, p4 = (
+                refiner(feature)
+                for refiner, feature in zip(self.feature_refiners, outputs)
+            )
+            return p3, p4, self.p5_pool(self.drax_refiner(x))
+        p3, p4, p5 = super().forward_features(x)
+        if self.architecture_variant in ("refine-p3p4", "pyramid-drax"):
+            p3, p4 = (
+                refiner(feature)
+                for refiner, feature in zip(self.feature_refiners, (p3, p4))
+            )
+        if self.architecture_variant == "spp-p5":
+            p5 = self.p5_pool(p5)
+        return p3, p4, p5
+
+    def load_imagenet_weights(self):
+        if self.architecture_variant != "pyramid-drax":
+            return super().load_imagenet_weights()
+        from torchvision.models import MobileNet_V3_Large_Weights, mobilenet_v3_large
+
+        reference = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V2)
+        self.features.load_state_dict(reference.features[:-1].state_dict(), strict=True)
 
     @staticmethod
     def normalize_feature_names(features: str | Iterable[str]) -> tuple[str, ...]:
@@ -37,9 +115,7 @@ class IncrementalYOLOXBackbone(YOLOXBackbone):
         normalized = tuple(
             str(name).strip().lower() for name in features if str(name).strip()
         )
-        invalid = sorted(
-            set(normalized) - set(IncrementalYOLOXBackbone.feature_names)
-        )
+        invalid = sorted(set(normalized) - set(IncrementalYOLOXBackbone.feature_names))
         if invalid:
             raise ValueError(
                 "incremental_adapter_features must contain only p3, p4, p5; "
@@ -169,10 +245,12 @@ class IncrementalYOLOXBackbone(YOLOXBackbone):
 
 
 class YOLOXDraxMobileNetV3LargeModel(LibreYOLOXModel):
-    def __init__(self, config="s", nb_classes=80):
+    def __init__(self, config="s", nb_classes=80, architecture_variant="legacy"):
         width = self.CONFIGS[config]["width"]
         backbone = IncrementalYOLOXBackbone(
-            tuple(int(c * width) for c in (256, 512, 1024)), input_bgr=True
+            tuple(int(c * width) for c in (256, 512, 1024)),
+            input_bgr=True,
+            architecture_variant=architecture_variant,
         )
         super().__init__(config=config, nb_classes=nb_classes, backbone=backbone)
 

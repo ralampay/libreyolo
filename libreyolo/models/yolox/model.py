@@ -55,7 +55,10 @@ class LibreYOLOX(BaseModel):
 
     @classmethod
     def can_load(cls, weights_dict: dict) -> bool:
-        if "backbone.backbone.adapter_down.weight" in weights_dict:
+        if (
+            "backbone.backbone.adapter_down.weight" in weights_dict
+            or "backbone.backbone.feature_refiners.0.scale" in weights_dict
+        ):
             return False
         return any("backbone.backbone" in k or "head.stems" in k for k in weights_dict)
 

@@ -65,8 +65,11 @@ class DraxMobileNetV3LargeBackbone(nn.Module):
         residual = x
         x = self.adapter_activation(self.adapter_norm(self.adapter_down(x)))
         x = self.drax_refiner(x)
-        x = residual + self.adapter_up_norm(self.adapter_up(x))
+        x = residual + self._adapter_update(x)
         return (*outputs, x)
+
+    def _adapter_update(self, x):
+        return self.adapter_up_norm(self.adapter_up(x))
 
     def forward(self, x):
         return tuple(

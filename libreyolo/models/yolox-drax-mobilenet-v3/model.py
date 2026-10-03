@@ -21,6 +21,8 @@ from .incremental_adapters import (
 from .nn import IncrementalYOLOXBackbone, YOLOXDraxMobileNetV3LargeModel
 from .trainer import YOLOXDraxMobileNetV3LargeConfig
 
+from .variants import validate_variant, variant_from_state
+
 _TRAIN_DEFAULTS = YOLOXDraxMobileNetV3LargeConfig()
 
 
@@ -38,15 +40,22 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
     TASK_INPUT_SIZES: ClassVar = {"detect": LibreYOLOX.INPUT_SIZES}
     TRAIN_CONFIG = YOLOXDraxMobileNetV3LargeConfig
 
-    def __init__(self, model_path=None, size="s", **kwargs):
+    def __init__(self, model_path=None, size="s", architecture_variant=None, **kwargs):
+        self._requested_architecture_variant = architecture_variant
+        self.architecture_variant = validate_variant(
+            "legacy" if architecture_variant is None else architecture_variant
+        )
         if isinstance(model_path, dict):
+            self._select_architecture_variant(model_path)
             spec = self._incremental_adapter_spec_for_state_dict(model_path)
             if spec:
                 self._incremental_adapter_spec = spec
         super().__init__(model_path=model_path, size=size, **kwargs)
 
     def _init_model(self):
-        model = YOLOXDraxMobileNetV3LargeModel(self.size, self.nb_classes)
+        model = YOLOXDraxMobileNetV3LargeModel(
+            self.size, self.nb_classes, self.architecture_variant
+        )
         spec = getattr(self, "_incremental_adapter_spec", None)
         if spec:
             backbone = model.backbone.backbone
@@ -62,6 +71,18 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
             if spec.get("enabled", False):
                 backbone.enable_incremental_adapters()
         return model
+
+    def _select_architecture_variant(self, state_dict, metadata=None):
+        variant = variant_from_state(state_dict, metadata)
+        requested = self._requested_architecture_variant
+        if requested is not None and requested != variant:
+            raise ValueError(
+                f"Requested architecture_variant {requested!r} differs from checkpoint {variant!r}"
+            )
+        changed = self.architecture_variant != variant
+        self.architecture_variant = variant
+        if changed and hasattr(self, "model"):
+            self.model = self._init_model()
 
     def _mobile_backbone(self):
         return self.model.backbone.backbone
@@ -172,9 +193,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         adapter_type = (
             normalize_incremental_adapter_type(config["type"])
             if config.get("type")
-            else infer_incremental_adapter_type(
-                state_dict, prefix, tuple(features)
-            )
+            else infer_incremental_adapter_type(state_dict, prefix, tuple(features))
         )
         adapter_class = get_incremental_adapter_class(adapter_type)
         adapter_config = adapter_class.config_from_state_dict(
@@ -203,6 +222,10 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         loaded: dict | None = None,
         checkpoint_task: str | None = None,
     ) -> dict:
+        self._select_architecture_variant(
+            state_dict,
+            loaded.get("backbone_variant") if isinstance(loaded, dict) else None,
+        )
         metadata = (
             loaded.get("incremental_adapters") if isinstance(loaded, dict) else None
         )
@@ -212,16 +235,23 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         )
 
     def _prepare_model_for_state_dict(self, state_dict: dict) -> None:
-        # Raw state dicts do not carry metadata, so infer only adapter structure.
+        self._select_architecture_variant(state_dict)
+        # Raw state dicts recover variant markers and adapter structure.
         if not self._mobile_backbone().incremental_adapters:
             self._attach_incremental_adapters_from_state_dict(state_dict)
         super()._prepare_model_for_state_dict(state_dict)
 
     def _checkpoint_extra_metadata(self) -> dict[str, Any]:
         backbone = self._mobile_backbone()
-        if not backbone.incremental_adapters:
-            return {}
-        return {"incremental_adapters": backbone.incremental_adapter_config()}
+        metadata = {}
+        if self.architecture_variant != "legacy":
+            metadata["backbone_variant"] = {
+                "version": 1,
+                "preset": self.architecture_variant,
+            }
+        if backbone.incremental_adapters:
+            metadata["incremental_adapters"] = backbone.incremental_adapter_config()
+        return metadata
 
     def _prepare_scratch_init(self) -> None:
         super()._prepare_scratch_init()
@@ -230,6 +260,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
     def _model_info_extra(self) -> dict[str, Any]:
         info = super()._model_info_extra()
         backbone = self._mobile_backbone()
+        info["architecture_variant"] = self.architecture_variant
         info.update(self.incremental_adapter_parameter_report())
         info["incremental_adapters"] = backbone.incremental_adapter_config()
         return info
@@ -343,7 +374,10 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
     @classmethod
     def can_load(cls, weights_dict):
         return (
-            "backbone.backbone.adapter_down.weight" in weights_dict
+            (
+                "backbone.backbone.adapter_down.weight" in weights_dict
+                or "backbone.backbone.feature_refiners.0.scale" in weights_dict
+            )
             and "head.stems.0.conv.weight" in weights_dict
         )
 

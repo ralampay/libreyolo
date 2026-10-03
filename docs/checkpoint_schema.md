@@ -444,3 +444,37 @@ No additional `drax` dictionary is required; the optional standard-YOLO9
 Drax configuration does not apply to these families. Input-normalization
 buffers are included in the state dict. Loading is strict and requires no
 ImageNet download.
+
+### YOLOX MobileNet Drax backbone variants
+
+The `yolox_drax_mobilenet_v3_large` family accepts `architecture_variant` at
+construction: `legacy`, `refine-p3p4`, `spp-p5`, `balanced-drax`, or
+`pyramid-drax`. Non-legacy
+checkpoints serialize `backbone_variant: {version: 1, preset: <name>}`. Strict
+loading reconstructs the graph before applying tensors and rejects metadata/key
+mismatches, unknown presets, versions, or explicitly conflicting constructor
+choices. Raw state dictionaries recover individual variants from their distinctive
+feature_refiners, p5_pool, or attention_scale tensor namespaces and recover
+`pyramid-drax` when all three namespaces are present. Other partial combinations are
+rejected. Checkpoints without
+these markers or metadata retain the original graph. Scratch resets, class-count
+rebuilding and worker reconstruction preserve the selected preset.
+
+These are independent ablations. P3/P4 refinement adds depthwise residual feature
+processing before projection. P5 pooling adds a compact three-stage pooling residual
+after the original adapter. Balanced Drax initializes convolution and attention
+update scales at 1e-3. `pyramid-drax` combines those three repairs as the integrated
+candidate and bounds its learned residual gates to +/-0.1. It omits MobileNet's
+final 160-to-960 classifier expansion and the matching 960-to-160-to-960 adapter,
+running its Drax block and pooling directly on the compact 160-channel P5 map.
+Each independent ablation and all legacy graph behavior remain unchanged. No
+pretrained weights are implied by variant selection.
+
+The MobileNet Drax trainer applies a family-scoped gradient-norm limit of 1.0. This
+prevents early scratch-training updates from producing non-finite assignment inputs;
+vanilla YOLOX retains its existing unclipped recipe.
+On CUDA/ROCm AMP runs, `pyramid-drax` evaluates its MobileNet/Drax backbone in FP32
+and returns to autocast for the larger PAN and detection head. This avoids observed
+ROCm mixed-precision launch failures while preserving most of AMP's compute savings.
+The new blocks are original project implementations using PyTorch primitives and
+existing permissively licensed LibreYOLO code; no external implementation was ported.

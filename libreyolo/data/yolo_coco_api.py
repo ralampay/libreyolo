@@ -400,7 +400,8 @@ class YOLOCocoAPI:
 
         # Add result annotations
         res_coco.anns = {}
-        for ann_id, result in enumerate(results):
+        # COCO reserves zero as the unmatched detection sentinel.
+        for ann_id, result in enumerate(results, start=1):
             ann = {
                 "id": ann_id,
                 "image_id": result["image_id"],

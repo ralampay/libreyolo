@@ -120,6 +120,7 @@ def _build_init_kw(model_instance: Any) -> dict:
         "proto_channels",
         "num_keypoints",
         "weight_variant",
+        "architecture_variant",
     ):
         if (attr in supported or supports_kwargs) and hasattr(model_instance, attr):
             kw[attr] = getattr(model_instance, attr)

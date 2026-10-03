@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass(kw_only=True)
 class YOLOXDraxMobileNetV3LargeConfig(YOLOXConfig):
-    """Family-scoped incremental-adapter training configuration."""
+    """Family-scoped stability and incremental-adapter training configuration."""
+
+    clip_max_norm: float = 1.0
 
     incremental_adapter: bool = False
     incremental_adapter_train_only: bool = False
