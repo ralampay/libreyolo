@@ -529,7 +529,7 @@ def build_family_train_kwargs(
             if cli_name not in provided:
                 kwargs.pop(internal_name, None)
         return kwargs
-    if family == "yolox_drax_mobilenet_v3_large":
+    if family in {"yolox_drax_mobilenet_v3_large", "yolox_drax"}:
         kwargs = build_train_kwargs(params)
         for name in (
             "incremental_adapter",

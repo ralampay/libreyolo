@@ -1,8 +1,20 @@
 # Drax MobileNetV3 Large detection backbones
 
-These detect-only variants replace the native YOLO9 or YOLOX backbone with
-MobileNetV3 Large and a final-stage Drax adapter. Each retains its parent
-neck, head, loss, and augmentation recipe.
+The original detect-only variants replace the native YOLO9 or YOLOX backbone
+with MobileNetV3 Large and a final-stage Drax adapter. Each retains its
+parent neck, head, loss, and augmentation recipe.
+
+The separate `yolox-drax-m` family retains the compact pyramid MobileNet
+features and uses a 0.875-wide, 0.67-deep YOLOX PAN/head. For six classes
+it has 21,006,041 parameters, compared with 25,283,649 for YOLOX-M.
+It supports `LibreYOLOXDraxM(size="m")` and
+`libreyolo train model=yolox-drax-m`. The original MobileNet aliases and
+checkpoint formats remain available.
+The new model initializes P3/P4 and P5 residual scales and the Drax branch
+scales to 0.05; the original pyramid variant retains 0.001. This follows a
+short-run diagnostic in which each original block changed its input feature
+RMS by less than 0.05% on one held-out image. The initialization has not
+been shown to improve detection accuracy.
 
 ```python
 from libreyolo import LibreYOLO9DraxMobileNetV3Large, LibreYOLOXDraxMobileNetV3Large

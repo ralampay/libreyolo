@@ -687,14 +687,14 @@ def train_cmd(
         "incremental_adapter_features",
     }
     if (
-        family != "yolox_drax_mobilenet_v3_large"
+        family not in {"yolox_drax_mobilenet_v3_large", "yolox_drax"}
         and incremental_options & user_provided
     ):
         exit_with_error(
             out,
             "config_unsupported",
             "IncrementalAdapters are supported only for "
-            "yolox-drax-mobilenet-v3-large.",
+            "yolox-drax-mobilenet-v3-large and yolox-drax-m.",
         )
     if params["incremental_adapter_train_only"] and not params["incremental_adapter"]:
         exit_with_error(
@@ -803,7 +803,7 @@ def train_cmd(
             resolved_config["freeze"] = params["freeze"]
         if params.get("lora"):
             resolved_config["lora"] = True
-        if family == "yolox_drax_mobilenet_v3_large":
+        if family in {"yolox_drax_mobilenet_v3_large", "yolox_drax"}:
             for option in sorted(incremental_options):
                 resolved_config[option] = params[option]
         if params.get("distill_model"):

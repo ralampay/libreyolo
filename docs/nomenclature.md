@@ -875,10 +875,15 @@ Plain COCO-default weights never carry a variant suffix.
 | --- | --- | --- | --- |
 | `yolo9_drax_mobilenet_v3_large` | `LibreYOLO9DraxMobileNetV3Large` | `yolo9-drax-mobilenet-v3-large` | `t`, `s`, `m`, `c` |
 | `yolox_drax_mobilenet_v3_large` | `LibreYOLOXDraxMobileNetV3Large` | `yolox-drax-mobilenet-v3-large` | `n`, `t`, `s`, `m`, `l`, `x` |
+| `yolox_drax` | `LibreYOLOXDraxM` | `yolox-drax` | `m` |
 
-Both are detect-only. The unsuffixed CLI aliases select size `s`; append
-`-t`, `-s`, etc. to select a detector size. MobileNetV3 remains Large at every
+All three are detect-only. The original MobileNet aliases select size `s`;
+`yolox-drax` selects size `m`. Append a size suffix to select another
+supported size. MobileNetV3 remains Large at every
 size; the size controls the neck and head. Checkpoint prefixes match the
 Python classes, for example `LibreYOLO9DraxMobileNetV3Larges.pt`.
+The `yolox-drax-m` model uses the compact pyramid backbone with YOLOX
+neck/head depth 0.67 and width 0.875. Its checkpoint prefix is
+`LibreYOLOXDrax`.
 These names identify architectures; no pretrained detector downloads are
 published. See [the backbone guide](drax_mobilenet_v3.md).

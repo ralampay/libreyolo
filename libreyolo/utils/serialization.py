@@ -382,10 +382,12 @@ def validate_checkpoint_metadata(
                 "hidden_channels",
             }
             allowed_adapter_keys = required_adapter_keys | {"type"}
-            if checkpoint.get("model_family") != "yolox_drax_mobilenet_v3_large":
+            if checkpoint.get("model_family") not in {
+                "yolox_drax_mobilenet_v3_large", "yolox_drax"
+            }:
                 errors.append(
                     "incremental_adapters metadata is valid only for "
-                    "model_family='yolox_drax_mobilenet_v3_large'."
+                    "YOLOX Drax model families."
                 )
             if not isinstance(adapters, dict):
                 errors.append("incremental_adapters must be a dictionary.")

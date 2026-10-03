@@ -181,8 +181,9 @@ experimental adapters are attached:
 The dictionary records the graph needed to restore
 `incremental_adapters.*` tensors before strict state-dict loading. It is
 optional so foundation checkpoints created before adapter support retain their
-original strict-loading behavior. This metadata and namespace are not valid
-for other model families. `type` is the canonical key in the family's built-in
+original strict-loading behavior. This metadata and namespace are also valid
+for `yolox_drax`, and not for other model families. `type` is the canonical
+key in the family's built-in
 adapter registry. Adapter checkpoints created before the registry omit it and
 load as `conv_bottleneck`. Unknown types fail before strict state-dict loading;
 they never silently fall back to another architecture.
@@ -446,6 +447,12 @@ buffers are included in the state dict. Loading is strict and requires no
 ImageNet download.
 
 ### YOLOX MobileNet Drax backbone variants
+
+The separate `yolox_drax` family supports size `m` only. It uses the
+`pyramid-drax` backbone variant and 0.875-wide, 0.67-deep YOLOX PAN/head.
+Its checkpoints record `model_family: yolox_drax` and
+`backbone_variant: {version: 1, preset: pyramid-drax}`. The original
+`yolox_drax_mobilenet_v3_large` graphs and checkpoints retain their widths.
 
 The `yolox_drax_mobilenet_v3_large` family accepts `architecture_variant` at
 construction: `legacy`, `refine-p3p4`, `spp-p5`, `balanced-drax`, or

@@ -39,6 +39,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
     CLI_ALIASES = ("yolox-drax-mobilenet-v3-large",)
     TASK_INPUT_SIZES: ClassVar = {"detect": LibreYOLOX.INPUT_SIZES}
     TRAIN_CONFIG = YOLOXDraxMobileNetV3LargeConfig
+    NETWORK_CLASS = YOLOXDraxMobileNetV3LargeModel
 
     def __init__(self, model_path=None, size="s", architecture_variant=None, **kwargs):
         self._requested_architecture_variant = architecture_variant
@@ -53,7 +54,7 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
         super().__init__(model_path=model_path, size=size, **kwargs)
 
     def _init_model(self):
-        model = YOLOXDraxMobileNetV3LargeModel(
+        model = self.NETWORK_CLASS(
             self.size, self.nb_classes, self.architecture_variant
         )
         spec = getattr(self, "_incremental_adapter_spec", None)
@@ -379,6 +380,10 @@ class LibreYOLOXDraxMobileNetV3Large(DraxMobileNetVariant, LibreYOLOX):
                 or "backbone.backbone.feature_refiners.0.scale" in weights_dict
             )
             and "head.stems.0.conv.weight" in weights_dict
+            and (
+                "backbone.backbone.projections.0.0.weight" not in weights_dict
+                or weights_dict["backbone.backbone.projections.0.0.weight"].shape[0] != 224
+            )
         )
 
     @classmethod
