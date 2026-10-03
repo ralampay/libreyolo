@@ -28,6 +28,7 @@ MODEL_GROUPS: dict[str, str] = {
     "yolo9_p2": "g1",
     "yolo9_drax_mobilenet_v3_large": "g1",
     "yolox_drax_mobilenet_v3_large": "g2",
+    "yolox_drax_csp": "g2",
     "ec": "g1",
     "rtdetr": "g1",
     "rtdetrv2": "g1",
