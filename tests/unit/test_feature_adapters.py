@@ -55,6 +55,7 @@ def test_yolox_l_neck_targets():
     model = LibreYOLOXModel(config="l", nb_classes=6)
     assert yolox_targets(model, "neck") == {"backbone.C3_p3": 256, "backbone.C3_n3": 512,
                                              "backbone.C3_n4": 1024}
+    assert yolox_targets(model) == yolox_targets(model, "neck")
     lora_targets = yolox_targets(model, "neck", "lora")
     assert lora_targets
     assert all(name.startswith("backbone.") and not name.startswith("backbone.backbone.")

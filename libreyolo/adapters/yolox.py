@@ -3,7 +3,7 @@
 from torch import nn
 
 
-def yolox_targets(model: nn.Module, placement: str = "backbone+neck", adapter: str = "drax") -> dict[str, int]:
+def yolox_targets(model: nn.Module, placement: str = "neck", adapter: str = "drax") -> dict[str, int]:
     if placement not in {"backbone", "neck", "backbone+neck"}:
         raise ValueError("placement must be backbone, neck, or backbone+neck")
     if not hasattr(model, "backbone") or not hasattr(model, "head"):
