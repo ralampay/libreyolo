@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 import torch
 from torch import nn
 
-from .layers import LoRAConv2d, create_adapter
+from .layers import LoRAConv2d, available_adapters, create_adapter
+from .hybrid import DraxHybridConv2d
 
 
 class AdaptedFeature(nn.Module):
@@ -49,16 +51,20 @@ def inject_adapters(model: nn.Module, adapter: str, targets: dict[str, int], *,
         raise ValueError("At least one adapter target is required")
     if reduction < 1 or rank < 1:
         raise ValueError("reduction and rank must be positive")
+    if adapter not in available_adapters() or not math.isfinite(alpha):
+        raise ValueError("Adapter name must be registered and alpha must be finite")
     resolved = []
     for path, channels in targets.items():
         parent_path, _, child_name = path.rpartition(".")
         parent = model.get_submodule(parent_path) if parent_path else model
         child = getattr(parent, child_name)
-        if isinstance(child, (AdaptedFeature, LoRAConv2d)):
+        if isinstance(child, (AdaptedFeature, LoRAConv2d, DraxHybridConv2d)):
             raise ValueError(f"Target {path} already has an adapter")
-        if adapter == "lora":
+        if adapter in {"lora", "drax-hybrid"}:
             if not isinstance(child, nn.Conv2d) or child.kernel_size != (1, 1) or child.groups != 1:
                 raise ValueError(f"LoRA target {path} must be a dense 1x1 Conv2d")
+            if adapter == "drax-hybrid" and (child.stride != (1, 1) or child.padding != (0, 0)):
+                raise ValueError(f"Drax hybrid target {path} must have stride one and no padding")
         elif channels < 1:
             raise ValueError(f"Target {path} needs a positive channel count")
         resolved.append((path, parent, child_name, child, channels))
@@ -66,8 +72,12 @@ def inject_adapters(model: nn.Module, adapter: str, targets: dict[str, int], *,
         parameter.requires_grad_(False)
     for path, parent, child_name, child, channels in resolved:
         weight = next(child.parameters())
-        replacement = (LoRAConv2d(child, rank=rank, alpha=alpha) if adapter == "lora"
-                       else AdaptedFeature(child, create_adapter(adapter, channels, reduction=reduction, alpha=alpha)))
+        if adapter == "lora":
+            replacement = LoRAConv2d(child, rank=rank, alpha=alpha)
+        elif adapter == "drax-hybrid":
+            replacement = DraxHybridConv2d(child, rank=rank, reduction=reduction, alpha=alpha)
+        else:
+            replacement = AdaptedFeature(child, create_adapter(adapter, channels, reduction=reduction, alpha=alpha))
         replacement.to(device=weight.device, dtype=weight.dtype)
         setattr(parent, child_name, replacement)
     if train_head:

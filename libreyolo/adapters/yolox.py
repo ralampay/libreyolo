@@ -21,4 +21,11 @@ def yolox_targets(model: nn.Module, placement: str = "neck", adapter: str = "dra
     if placement in {"neck", "backbone+neck"}:
         selected.update({f"backbone.{stage}": int(ch * width)
                          for stage, ch in (("C3_p3", 256), ("C3_n3", 512), ("C3_n4", 1024))})
+    if adapter == "drax-hybrid":
+        # Backbone stages end in CSP modules; neck outputs are themselves CSPs.
+        return {
+            (f"{name}.{len(model.get_submodule(name)) - 1}.conv3.conv"
+             if name.startswith("backbone.backbone.") else f"{name}.conv3.conv"): channels
+            for name, channels in selected.items()
+        }
     return selected

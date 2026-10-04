@@ -60,3 +60,24 @@ ported third-party code. No external implementation code was copied.
 
 For the research experiment, split preparation, training, evaluation and
 reports are owned by MLX. See its object-detection adapter guide.
+# Drax hybrid
+
+`drax-hybrid` combines a genuine rank-configurable LoRA weight update with a
+nonlinear compressed spatial bypass. The bypass uses local and dilation-2
+depthwise convolutions, a learned two-way softmax, and a compressed 1x1 mixer.
+This is an original Convpass-inspired depthwise-separable adaptation, not an
+exact reproduction of Convpass. It retains the original Drax adapter's
+local/context fusion idea. No third-party source code is copied.
+
+The generic `DraxHybridConv2d` accepts a frozen dense, unpadded, stride-one 1x1
+convolution. Both branch output projections start at zero. Its linear path is
+exactly `W + (alpha/rank) BA`; the spatial path is nonlinear and cannot be
+merged into that weight update. `inject_adapters` accepts the registered name
+with existing rank, reduction, and alpha controls. The YOLOX neck policy wraps
+only `C3_p3.conv3.conv`, `C3_n3.conv3.conv`, and `C3_n4.conv3.conv`, before their
+existing normalization and activation. This is narrower placement than the
+existing LoRA policy. Backbone placement uses the final CSP projections at
+strides 8, 16, and 32. Standard foundation checkpoints load before injection.
+
+At rank 8 and reduction 8, YOLOX-L neck injection trains 400,966 parameters.
+Memory efficiency and detection accuracy must be measured for each workload.
