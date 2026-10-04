@@ -58,13 +58,14 @@ def test_yolox_injection_identity_and_checkpoint_roundtrip(placement):
     with torch.no_grad():
         expected = model(x)
     targets = yolox_targets(model, placement, "drax-hybrid")
+    assert targets == yolox_targets(model, placement, "lora")
     report = inject_adapters(model, "drax-hybrid", targets)
-    assert len(targets) == (6 if placement == "backbone+neck" else 3)
     assert report.frozen_parameters == 54_151_841
     with torch.no_grad():
         torch.testing.assert_close(model(x), expected, rtol=0, atol=0)
     if placement == "neck":
-        assert report.trainable_parameters == 400_966
+        assert len(targets) == 26
+        assert report.trainable_parameters == 2_234_900
     with pytest.raises(ValueError, match="already has an adapter"):
         inject_adapters(model, "drax-hybrid", targets)
     state = adapter_state_dict(model)

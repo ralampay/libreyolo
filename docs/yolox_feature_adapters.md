@@ -73,11 +73,12 @@ The generic `DraxHybridConv2d` accepts a frozen dense, unpadded, stride-one 1x1
 convolution. Both branch output projections start at zero. Its linear path is
 exactly `W + (alpha/rank) BA`; the spatial path is nonlinear and cannot be
 merged into that weight update. `inject_adapters` accepts the registered name
-with existing rank, reduction, and alpha controls. The YOLOX neck policy wraps
-only `C3_p3.conv3.conv`, `C3_n3.conv3.conv`, and `C3_n4.conv3.conv`, before their
-existing normalization and activation. This is narrower placement than the
-existing LoRA policy. Backbone placement uses the final CSP projections at
-strides 8, 16, and 32. Standard foundation checkpoints load before injection.
+with existing rank, reduction, and alpha controls. The YOLOX policy shares the
+exact target selector with LoRA for neck, backbone, and combined placement.
+Neck placement wraps 26 dense 1x1 convolutions before their existing normalization
+and activation. Standard foundation checkpoints load before injection.
 
-At rank 8 and reduction 8, YOLOX-L neck injection trains 400,966 parameters.
+At rank 8 and reduction 8, YOLOX-L neck injection trains 2,234,900 parameters.
+Earlier three-projection checkpoints require their recorded injection paths;
+they are not compatible with the new default placement.
 Memory efficiency and detection accuracy must be measured for each workload.
