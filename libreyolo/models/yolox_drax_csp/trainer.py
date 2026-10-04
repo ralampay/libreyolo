@@ -8,7 +8,7 @@ from ..yolox.trainer import YOLOXTrainer
 
 @dataclass(kw_only=True)
 class YOLOXDraxCSPMConfig(YOLOXConfig):
-    clip_max_norm: float = 1.0
+    """Use the same optimization defaults as the YOLOX control model."""
 
 
 class YOLOXDraxCSPMTrainer(YOLOXTrainer):

@@ -876,11 +876,13 @@ Plain COCO-default weights never carry a variant suffix.
 | `yolo9_drax_mobilenet_v3_large` | `LibreYOLO9DraxMobileNetV3Large` | `yolo9-drax-mobilenet-v3-large` | `t`, `s`, `m`, `c` |
 | `yolox_drax_mobilenet_v3_large` | `LibreYOLOXDraxMobileNetV3Large` | `yolox-drax-mobilenet-v3-large` | `n`, `t`, `s`, `m`, `l`, `x` |
 | `yolox_drax_csp` | `LibreYOLOXDraxCSPM` | `yolox-drax-csp` | `m` |
+| `yolox_drax_csp_fusion` | `LibreYOLOXDraxCSPFusionM` | `yolox-drax-csp-fusion` | `m` |
 
-All three are detect-only. The unsuffixed MobileNet aliases select size `s`;
-`yolox-drax-csp` selects size `m`. Append a supported size suffix to select a
+All four are detect-only. The unsuffixed MobileNet aliases select size `s`;
+the CSP aliases select size `m`. Append a supported size suffix to select a
 detector size. MobileNetV3 remains Large at every size for the MobileNet
 families; their size controls the neck and head. Example checkpoint filenames
-are `LibreYOLO9DraxMobileNetV3Larges.pt` and `LibreYOLOXDraxCSPm.pt`.
+are `LibreYOLO9DraxMobileNetV3Larges.pt`, `LibreYOLOXDraxCSPm.pt`, and
+`LibreYOLOXDraxCSPFusionm.pt`.
 These names identify architectures; no pretrained detector downloads are
 published. See [the backbone guide](drax_mobilenet_v3.md).

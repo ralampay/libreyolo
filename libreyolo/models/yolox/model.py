@@ -58,6 +58,7 @@ class LibreYOLOX(BaseModel):
         if (
             "backbone.backbone.adapter_down.weight" in weights_dict
             or "backbone.backbone.p5_scale" in weights_dict
+            or "backbone.p5_context_scale" in weights_dict
         ):
             return False
         return any("backbone.backbone" in k or "head.stems" in k for k in weights_dict)

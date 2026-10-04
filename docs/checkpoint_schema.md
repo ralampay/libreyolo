@@ -442,6 +442,14 @@ The PAN and head use width 0.6875. Checkpoints use the standard v1.0 wrapper
 with `model_family: yolox_drax_csp` and strict loading. The family is separate
 from `yolox_drax_mobilenet_v3_large`; no pretrained weights are required.
 
+The versioned `yolox_drax_csp_fusion` family also supports size `m` only. It
+keeps the full YOLOX-M CSPDarknet and PAN tensor shapes, adds a residual Drax
+P5 context path and branch attention at all four PAN merges, and uses a
+depthwise YOLOX head to stay below the YOLOX-M parameter count. Checkpoints use
+`model_family: yolox_drax_csp_fusion`, strict loading, and the canonical name
+`LibreYOLOXDraxCSPFusionm.pt`. They are intentionally not interchangeable with
+the legacy `yolox_drax_csp` graph.
+
 ## Drax MobileNetV3 Large detector checkpoints
 
 Families `yolo9_drax_mobilenet_v3_large` and

@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from libreyolo import LibreYOLO, LibreYOLOX, LibreYOLOXDraxCSPM
+from libreyolo.models.yolox_drax_csp.trainer import YOLOXDraxCSPMConfig
 
 pytestmark = pytest.mark.unit
 
@@ -58,3 +59,8 @@ def test_csp_drax_checkpoint_reloads_without_changing_other_families(tmp_path):
     assert not LibreYOLOX.can_load(loaded.model.state_dict())
     detector._rebuild_for_new_classes(3)
     assert detector.model.head.num_classes == 3
+
+
+def test_csp_drax_does_not_apply_family_specific_gradient_clipping():
+    config = YOLOXDraxCSPMConfig()
+    assert not hasattr(config, "clip_max_norm")
