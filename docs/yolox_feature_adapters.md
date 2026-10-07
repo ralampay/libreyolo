@@ -82,3 +82,10 @@ At rank 8 and reduction 8, YOLOX-L neck injection trains 2,234,900 parameters.
 Earlier three-projection checkpoints require their recorded injection paths;
 they are not compatible with the new default placement.
 Memory efficiency and detection accuracy must be measured for each workload.
+
+# Compatibility status
+
+This package remains available for existing callers and checkpoints. Active
+experimental adapter implementations now live in MLX. New research adapters
+must be added there; LibreYOLO retains this standalone compatibility surface
+without an MLX dependency. Detector models and ordinary training are unchanged.

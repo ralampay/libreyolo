@@ -277,6 +277,8 @@ class TrainConfig:
 class YOLOXConfig(TrainConfig):
     """YOLOX-specific training defaults."""
 
+    max_labels: int = 50
+
     # BatchNorm-heavy pure CNN: sync BN stats across ranks under DDP (same
     # rationale as :class:`YOLO9Config`, issue #484). No-op outside DDP.
     sync_bn: bool = True
@@ -291,6 +293,11 @@ class YOLOXConfig(TrainConfig):
     mixup_prob: float = 1.0
     ema_decay: float = 0.9998
     name: str = "exp"
+
+    def __post_init__(self):
+        super().__post_init__()
+        if isinstance(self.max_labels, bool) or not isinstance(self.max_labels, int) or self.max_labels < 1:
+            raise ValueError("max_labels must be a positive integer")
 
 
 @dataclass(kw_only=True)
@@ -1233,4 +1240,3 @@ class FOMOConfig(TrainConfig):
     distance_tolerance: float = 1.5
 
     name: str = "fomo_exp"
-

@@ -9,7 +9,8 @@ import torch
 from torch import nn
 
 from .layers import LoRAConv2d, available_adapters, create_adapter
-from .hybrid import DraxHybridConv2d
+from .residual_fusion import DraxResidualFusionConv2d
+from .hybrid import DraxHybridConv2d, DraxSpatialConv2d
 
 
 class AdaptedFeature(nn.Module):
@@ -58,12 +59,12 @@ def inject_adapters(model: nn.Module, adapter: str, targets: dict[str, int], *,
         parent_path, _, child_name = path.rpartition(".")
         parent = model.get_submodule(parent_path) if parent_path else model
         child = getattr(parent, child_name)
-        if isinstance(child, (AdaptedFeature, LoRAConv2d, DraxHybridConv2d)):
+        if isinstance(child, (AdaptedFeature, LoRAConv2d, DraxHybridConv2d, DraxSpatialConv2d, DraxResidualFusionConv2d)):
             raise ValueError(f"Target {path} already has an adapter")
-        if adapter in {"lora", "drax-hybrid"}:
+        if adapter in {"lora", "drax-hybrid", "drax-spatial", "drax-residual-fusion"}:
             if not isinstance(child, nn.Conv2d) or child.kernel_size != (1, 1) or child.groups != 1:
                 raise ValueError(f"LoRA target {path} must be a dense 1x1 Conv2d")
-            if adapter == "drax-hybrid" and (child.stride != (1, 1) or child.padding != (0, 0)):
+            if adapter in {"drax-hybrid", "drax-spatial", "drax-residual-fusion"} and (child.stride != (1, 1) or child.padding != (0, 0)):
                 raise ValueError(f"Drax hybrid target {path} must have stride one and no padding")
         elif channels < 1:
             raise ValueError(f"Target {path} needs a positive channel count")
@@ -76,6 +77,10 @@ def inject_adapters(model: nn.Module, adapter: str, targets: dict[str, int], *,
             replacement = LoRAConv2d(child, rank=rank, alpha=alpha)
         elif adapter == "drax-hybrid":
             replacement = DraxHybridConv2d(child, rank=rank, reduction=reduction, alpha=alpha)
+        elif adapter == "drax-residual-fusion":
+            replacement = DraxResidualFusionConv2d(child, reduction=reduction, alpha=alpha)
+        elif adapter == "drax-spatial":
+            replacement = DraxSpatialConv2d(child, reduction=reduction, alpha=alpha)
         else:
             replacement = AdaptedFeature(child, create_adapter(adapter, channels, reduction=reduction, alpha=alpha))
         replacement.to(device=weight.device, dtype=weight.dtype)

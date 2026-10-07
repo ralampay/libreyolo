@@ -50,7 +50,7 @@ class YOLOXTrainer(BaseTrainer):
 
     def create_transforms(self):
         preproc = TrainTransform(
-            max_labels=50,
+            max_labels=self.config.max_labels,
             flip_prob=self.config.flip_prob,
             hsv_prob=self.config.hsv_prob,
             flipud=getattr(self.config, "flipud", 0.0),

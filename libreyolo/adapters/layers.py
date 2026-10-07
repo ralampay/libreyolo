@@ -133,7 +133,7 @@ _REGISTRY = {
 
 
 def available_adapters() -> tuple[str, ...]:
-    return (*_REGISTRY, "lora", "drax-hybrid")
+    return (*_REGISTRY, "lora", "drax-hybrid", "drax-spatial", "drax-residual-fusion")
 
 
 def create_adapter(name: str, channels: int, *, reduction: int = 8, alpha: float = 1.0) -> nn.Module:

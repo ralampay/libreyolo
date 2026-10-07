@@ -1,5 +1,15 @@
 # Agent Instructions
 
+## Research adapter ownership
+
+- New experimental object-detection adapters belong to MLX, not LibreYOLO.
+  MLX owns their active implementations, registry, injection and experiment use.
+- Keep `libreyolo.adapters` as frozen legacy compatibility support. Preserve
+  existing imports, signatures and checkpoint behavior; only compatibility
+  fixes belong here. Do not introduce an MLX dependency into LibreYOLO.
+- Ordinary detector architectures, generic training facilities and unrelated
+  model-family components remain LibreYOLO responsibilities.
+
 ## Licensing policy (read this first)
 
 - This is the most important policy in this repository. LibreYOLO's entire

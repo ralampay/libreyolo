@@ -28,7 +28,7 @@ def test_lora_is_a_low_rank_weight_update():
 
 @pytest.mark.unit
 def test_registry_and_freezing():
-    assert set(available_adapters()) == {"bottleneck", "ssf", "lora", "convpass", "conv-adapter", "drax", "drax-hybrid"}
+    assert set(available_adapters()) == {"bottleneck", "ssf", "lora", "convpass", "conv-adapter", "drax", "drax-hybrid", "drax-spatial", "drax-residual-fusion"}
     class Toy(nn.Module):
         def __init__(self):
             super().__init__()
