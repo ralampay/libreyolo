@@ -216,13 +216,16 @@ def test_drax_checkpoint_round_trip_reconstructs_and_restores_weight(tmp_path):
     with torch.no_grad():
         original.model.state_dict()[key].fill_(0.125)
 
+    original.letterbox_pad = "center"
     checkpoint = tmp_path / "drax.pt"
     original.save(str(checkpoint))
     raw = load_trusted_torch_file(checkpoint)
     assert raw["drax"] == config.to_dict()
+    assert raw["letterbox_pad"] == "center"
 
     loaded = LibreYOLO9(str(checkpoint), size="s", device="cpu")
     assert loaded.drax_config == config
+    assert loaded.letterbox_pad == "center"
     assert isinstance(loaded.model.backbone.drax4, DraxBlock)
     assert torch.equal(original.model.state_dict()[key], loaded.model.state_dict()[key])
 
@@ -312,6 +315,10 @@ def test_trainer_metadata_and_matching_resume(tmp_path):
         data="unused.yaml",
         device="cpu",
     )
+    wrapper.letterbox_pad = "center"
+    metadata = trainer._checkpoint_extra_metadata()
+    assert metadata["drax"] == config.to_dict()
+    assert metadata["letterbox_pad"] == "center"
     trainer.optimizer = trainer._setup_optimizer()
     first = next(iter(trainer.optimizer.param_groups[0]["params"]))
     first.grad = torch.ones_like(first)

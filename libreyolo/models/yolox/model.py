@@ -47,6 +47,7 @@ class LibreYOLOX(BaseModel):
     SUPPORTS_CUDA_GRAPH = True
     INPUT_SIZES = {"n": 416, "t": 416, "s": 640, "m": 640, "l": 640, "x": 640}
     TRAIN_CONFIG = YOLOXConfig
+    RESUME_RESTORES_TRAIN_ARGS = True
     val_preprocessor_class = YOLOXValPreprocessor
 
     # =========================================================================
@@ -59,6 +60,7 @@ class LibreYOLOX(BaseModel):
             "backbone.backbone.adapter_down.weight" in weights_dict
             or "backbone.backbone.p5_scale" in weights_dict
             or "backbone.p5_context_scale" in weights_dict
+            or "backbone.backbone._model.blocks.0.attn.gk_proj.0.weight" in weights_dict
         ):
             return False
         return any("backbone.backbone" in k or "head.stems" in k for k in weights_dict)
@@ -161,7 +163,11 @@ class LibreYOLOX(BaseModel):
         # Recompute ratio if caller passed default (batch validation path)
         if ratio == 1.0 and original_size is not None:
             orig_w, orig_h = original_size
-            ratio = min(actual_input_size / orig_h, actual_input_size / orig_w)
+            if isinstance(actual_input_size, (list, tuple)):
+                actual_h, actual_w = int(actual_input_size[0]), int(actual_input_size[1])
+            else:
+                actual_h = actual_w = int(actual_input_size)
+            ratio = min(actual_h / orig_h, actual_w / orig_w)
 
         return postprocess(
             output,
@@ -316,13 +322,8 @@ class LibreYOLOX(BaseModel):
         )
 
         if resume:
-            if not self.model_path:
-                raise ValueError(
-                    "resume=True requires a checkpoint. Load one first: "
-                    "model = LibreYOLOX('path/to/last.pt'); model.train(data=..., resume=True)"
-                )
             trainer.setup()
-            trainer.resume(str(self.model_path))
+            trainer.resume(self._resume_checkpoint(resume))
 
         results = trainer.train()
 
